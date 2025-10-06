@@ -46,22 +46,48 @@ const CountingMobile: React.FC = () => {
     return String(value);
   };
 
-  // Helper function to handle numeric input
+  // CORREÇÃO CRÍTICA: Função para verificar se permite vírgula
+  const allowsFractionalInput = (unit?: string): boolean => {
+    if (!unit) return true; // Se não tem unidade, permite vírgula por padrão
+    
+    const unitUpper = unit.toUpperCase().trim();
+    
+    // Lista expandida de unidades que permitem vírgula
+    const fractionalUnits = [
+      'KILO', 'KG', 'KILOS', 'QUILOS',
+      'GRAMA', 'GR', 'GRAMAS', 'G',
+      'LITRO', 'L', 'LITROS', 'LT',
+      'ML', 'MILILITRO', 'MILILITROS',
+      'METRO', 'M', 'METROS', 'MT',
+      'CM', 'CENTIMETRO', 'CENTIMETROS',
+      'MM', 'MILIMETRO', 'MILIMETROS',
+      'KM', 'QUILOMETRO', 'QUILOMETROS',
+      'M²', 'M2', 'METRO²', 'METRO2',
+      'CM²', 'CM2', 'CENTIMETRO²', 'CENTIMETRO2',
+      'M³', 'M3', 'METRO³', 'METRO3',
+      'TON', 'TONELADA', 'TONELADAS', 'T'
+    ];
+    
+    return fractionalUnits.includes(unitUpper);
+  };
+
+  // Helper function to handle numeric input - CORRIGIDO
   const handleNumericInput = (value: string, unit?: string): string => {
-    // Check if unit allows fractional values (weight units)
-    const allowsFractional = unit && ['KILO', 'KG', 'GRAMA', 'GR'].includes(unit.toUpperCase());
+    const allowsFractional = allowsFractionalInput(unit);
+    
+    console.log('🔍 VÍRGULA DEBUG:', { value, unit, allowsFractional });
     
     if (allowsFractional) {
-      // For weight units, allow numbers and comma
+      // Para unidades que permitem vírgula, aceitar números e vírgula
       const cleanValue = value.replace(/[^0-9,]/g, '');
-      // Ensure only one comma
+      // Garantir apenas uma vírgula
       const parts = cleanValue.split(',');
       if (parts.length > 2) {
         return parts[0] + ',' + parts.slice(1).join('');
       }
       return cleanValue;
     } else {
-      // For other units, remove any non-numeric characters (current behavior)
+      // Para outras unidades, apenas números inteiros
       const numericValue = value.replace(/[^0-9]/g, '');
       return numericValue;
     }
@@ -80,10 +106,10 @@ const CountingMobile: React.FC = () => {
 
   // CORREÇÃO: Função para formatar quantidade para exibição
   const formatQuantityForDisplay = (quantity: number, unit: string): string => {
-    const allowsFractional = ['KILO', 'KG', 'GRAMA', 'GR'].includes(unit.toUpperCase());
+    const allowsFractional = allowsFractionalInput(unit);
     
     if (allowsFractional) {
-      // Para unidades de peso, mostrar com vírgula se for decimal
+      // Para unidades que permitem vírgula, mostrar com vírgula se for decimal
       return quantity.toString().replace('.', ',');
     } else {
       // Para outras unidades, mostrar como inteiro
@@ -1324,6 +1350,10 @@ const CountingMobile: React.FC = () => {
                     <div className="border-t pt-4">
                       <div className="mb-4">
                         <span className="text-base font-bold text-gray-900">Quantidade:</span>
+                        {/* CORREÇÃO: Mostrar se aceita vírgula */}
+                        {allowsFractionalInput(productUnit) && (
+                          <span className="text-xs text-green-600 ml-2">(aceita vírgula)</span>
+                        )}
                       </div>
                       
                       <div className="flex items-center justify-center space-x-3 mb-4">
@@ -1344,6 +1374,13 @@ const CountingMobile: React.FC = () => {
                           onChange={(e) => {
                             const processedValue = handleNumericInput(e.target.value, productUnit);
                             
+                            console.log('🔍 VÍRGULA INPUT:', { 
+                              original: e.target.value, 
+                              processed: processedValue, 
+                              unit: productUnit,
+                              allows: allowsFractionalInput(productUnit)
+                            });
+                            
                             // Atualizar input visual
                             setQuantityInputs(prev => ({
                               ...prev,
@@ -1351,8 +1388,8 @@ const CountingMobile: React.FC = () => {
                             }));
                             
                             // Converter para número e atualizar estado
-                            if (['KILO', 'KG', 'GRAMA', 'GR'].includes(productUnit.toUpperCase())) {
-                              // Para unidades de peso, aceitar vírgula
+                            if (allowsFractionalInput(productUnit)) {
+                              // Para unidades que permitem vírgula, aceitar decimais
                               const numericValue = processedValue === '' ? 0 : parseFloat(processedValue.replace(',', '.'));
                               updateQuantity(product.id, isNaN(numericValue) ? 0 : numericValue);
                             } else {
