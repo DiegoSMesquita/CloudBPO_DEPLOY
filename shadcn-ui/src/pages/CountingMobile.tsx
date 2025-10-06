@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Search, Filter, Save, CheckCircle, Clock, Package, AlertTriangle, Plus, Minus, Calendar, X } from 'lucide-react';
 import { supabase, TABLES } from '../lib/supabase';
@@ -31,11 +31,8 @@ const CountingMobile: React.FC = () => {
   // Estado para calculadora de conversão
   const [calculatorInputs, setCalculatorInputs] = useState<{[productId: string]: string}>({});
   
-  // CORREÇÃO: Estado para controlar valores de input de quantidade
+  // SIMPLIFICADO: Estado para controlar valores de input de quantidade
   const [quantityInputs, setQuantityInputs] = useState<{[productId: string]: string}>({});
-  
-  // NOVO: Estado para rastrear valores anteriores e detectar adição de dígitos
-  const [previousValues, setPreviousValues] = useState<{[productId: string]: string}>({});
 
   // Use correct table names with system prefix
   const COUNTING_ITEMS_TABLE = 'app_0bcfd220f3_counting_items';
@@ -49,7 +46,7 @@ const CountingMobile: React.FC = () => {
     return String(value);
   };
 
-  // CORREÇÃO CRÍTICA: Função para verificar se permite vírgula
+  // SIMPLIFICADO: Função para verificar se permite vírgula
   const allowsFractionalInput = (unit?: string): boolean => {
     if (!unit) return true; // Se não tem unidade, permite vírgula por padrão
     
@@ -70,52 +67,25 @@ const CountingMobile: React.FC = () => {
     return !integerOnlyUnits.includes(unitUpper);
   };
 
-  // CORREÇÃO CRÍTICA: Nova função para processar input inteligentemente
-  const handleNumericInput = (newValue: string, previousValue: string, unit?: string): string => {
+  // SIMPLIFICADO: Função para processar input - ACEITA TUDO QUE O USUÁRIO DIGITA
+  const handleQuantityInput = (value: string, unit?: string): string => {
     const allowsFractional = allowsFractionalInput(unit);
     
-    console.log('🔍 VÍRGULA DEBUG INTELIGENTE:', { 
-      newValue, 
-      previousValue, 
-      unit, 
-      allowsFractional 
-    });
-    
-    // Se não permite vírgula, apenas números
     if (!allowsFractional) {
-      const numericValue = newValue.replace(/[^0-9]/g, '');
-      console.log('❌ Unidade não permite vírgula:', numericValue);
-      return numericValue;
+      // Para unidades de UNIDADE/UNID/UND, apenas números inteiros
+      return value.replace(/[^0-9]/g, '');
     }
     
-    // DETECÇÃO INTELIGENTE: Se o valor anterior tinha vírgula e o novo não tem
-    // mas o novo valor começa com os mesmos dígitos, provavelmente o usuário
-    // está tentando adicionar dígitos após a vírgula
-    if (previousValue.includes(',') && !newValue.includes(',')) {
-      const beforeComma = previousValue.split(',')[0];
-      
-      // Se o novo valor começa com os dígitos antes da vírgula
-      // e tem mais dígitos, provavelmente está adicionando após a vírgula
-      if (newValue.startsWith(beforeComma) && newValue.length > beforeComma.length) {
-        const afterComma = newValue.substring(beforeComma.length);
-        const reconstructed = beforeComma + ',' + afterComma;
-        console.log('🔧 RECONSTRUINDO VÍRGULA:', { beforeComma, afterComma, reconstructed });
-        return reconstructed;
-      }
-    }
-    
-    // Processamento normal: aceitar números e vírgula
-    const cleanValue = newValue.replace(/[^0-9,]/g, '');
+    // Para todas as outras unidades, aceita EXATAMENTE o que o usuário digita
+    // Apenas remove caracteres que não são números ou vírgula
+    const cleanValue = value.replace(/[^0-9,]/g, '');
     
     // Garantir apenas uma vírgula
     const parts = cleanValue.split(',');
     if (parts.length > 2) {
-      const result = parts[0] + ',' + parts.slice(1).join('');
-      console.log('✅ Limitando vírgulas:', result);
-      return result;
+      return parts[0] + ',' + parts.slice(1).join('');
     }
     
-    console.log('✅ Valor processado:', cleanValue);
     return cleanValue;
   };
 
@@ -139,7 +109,7 @@ const CountingMobile: React.FC = () => {
     return product.unit || product.alternativeUnit || 'unidades';
   };
 
-  // CORREÇÃO: Função para formatar quantidade para exibição
+  // SIMPLIFICADO: Função para formatar quantidade para exibição
   const formatQuantityForDisplay = (quantity: number, unit: string): string => {
     const allowsFractional = allowsFractionalInput(unit);
     
@@ -597,20 +567,16 @@ const CountingMobile: React.FC = () => {
           }));
           setCountingItems(mappedItems);
           
-          // CORREÇÃO: Inicializar inputs de quantidade com valores existentes
+          // SIMPLIFICADO: Inicializar inputs de quantidade com valores existentes
           const initialQuantityInputs: {[productId: string]: string} = {};
-          const initialPreviousValues: {[productId: string]: string} = {};
           mappedItems.forEach(item => {
             const product = mappedProducts.find(p => p.id === item.productId);
             if (product) {
               const unit = getProductUnit(product);
-              const displayValue = formatQuantityForDisplay(item.quantity, unit);
-              initialQuantityInputs[item.productId] = displayValue;
-              initialPreviousValues[item.productId] = displayValue;
+              initialQuantityInputs[item.productId] = formatQuantityForDisplay(item.quantity, unit);
             }
           });
           setQuantityInputs(initialQuantityInputs);
-          setPreviousValues(initialPreviousValues);
           
           console.log('✅ MOBILE: Itens contados carregados:', mappedItems.length);
         } else {
@@ -757,16 +723,12 @@ const CountingMobile: React.FC = () => {
       }
     });
     
-    // CORREÇÃO: Atualizar também o input de quantidade
+    // SIMPLIFICADO: Atualizar também o input de quantidade
     const product = products.find(p => p.id === productId);
     if (product) {
       const unit = getProductUnit(product);
       const displayValue = formatQuantityForDisplay(quantity, unit);
       setQuantityInputs(prev => ({
-        ...prev,
-        [productId]: displayValue
-      }));
-      setPreviousValues(prev => ({
         ...prev,
         [productId]: displayValue
       }));
@@ -778,10 +740,9 @@ const CountingMobile: React.FC = () => {
     return item?.quantity || 0;
   };
 
-  // CORREÇÃO: Função para atualizar input da calculadora - ACEITA VÍRGULA
+  // SIMPLIFICADO: Função para atualizar input da calculadora - ACEITA VÍRGULA
   const updateCalculatorInput = (productId: string, value: string) => {
-    const previousValue = calculatorInputs[productId] || '';
-    const processedValue = handleNumericInput(value, previousValue, 'KILO'); // Calculadora sempre aceita vírgula
+    const processedValue = handleQuantityInput(value, 'KILO'); // Calculadora sempre aceita vírgula
     setCalculatorInputs(prev => ({
       ...prev,
       [productId]: processedValue
@@ -1317,11 +1278,11 @@ const CountingMobile: React.FC = () => {
               const quantity = getProductQuantity(product.id);
               const isSaving = savingItems.has(product.id);
               const boxQuantityStr = calculatorInputs[product.id] || '';
-              const boxQuantity = parseDecimalInput(boxQuantityStr); // CORREÇÃO: Usar parseDecimalInput
+              const boxQuantity = parseDecimalInput(boxQuantityStr);
               const calculatedUnits = boxQuantity * product.conversionFactor;
               const productUnit = getProductUnit(product);
               
-              // CORREÇÃO: Usar valor do input de quantidade
+              // SIMPLIFICADO: Usar valor do input de quantidade
               const quantityInputValue = quantityInputs[product.id] || (quantity === 0 ? '' : formatQuantityForDisplay(quantity, productUnit));
               
               return (
@@ -1338,7 +1299,7 @@ const CountingMobile: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Calculadora de Conversão - CORREÇÃO APLICADA */}
+                    {/* Calculadora de Conversão */}
                     {product.conversionFactor > 1 && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                         <div className="flex items-center space-x-2 mb-3">
@@ -1395,7 +1356,6 @@ const CountingMobile: React.FC = () => {
                     <div className="border-t pt-4">
                       <div className="mb-4">
                         <span className="text-base font-bold text-gray-900">Quantidade:</span>
-                        {/* CORREÇÃO: Mostrar indicador baseado na unidade específica */}
                         {allowsFractionalInput(productUnit) ? (
                           <span className="text-xs text-green-600 ml-2">(aceita vírgula)</span>
                         ) : (
@@ -1413,31 +1373,22 @@ const CountingMobile: React.FC = () => {
                           <Minus className="w-6 h-6" />
                         </button>
                         
-                        {/* Quantity Input - CORREÇÃO CRÍTICA: Nova lógica inteligente */}
+                        {/* SIMPLIFICADO: Campo de quantidade - ACEITA EXATAMENTE O QUE O USUÁRIO DIGITA */}
                         <input
                           type="text"
                           inputMode="text"
                           value={quantityInputValue}
                           onChange={(e) => {
-                            const previousValue = previousValues[product.id] || '';
-                            const processedValue = handleNumericInput(e.target.value, previousValue, productUnit);
+                            const processedValue = handleQuantityInput(e.target.value, productUnit);
                             
-                            console.log('🔍 VÍRGULA INPUT INTELIGENTE:', { 
-                              original: e.target.value, 
-                              previous: previousValue,
-                              processed: processedValue, 
-                              unit: productUnit,
-                              allows: allowsFractionalInput(productUnit)
+                            console.log('📝 ENTRADA LIVRE:', { 
+                              digitado: e.target.value, 
+                              processado: processedValue, 
+                              unidade: productUnit
                             });
                             
-                            // Atualizar input visual
+                            // Atualizar input visual EXATAMENTE como processado
                             setQuantityInputs(prev => ({
-                              ...prev,
-                              [product.id]: processedValue
-                            }));
-                            
-                            // Atualizar valor anterior
-                            setPreviousValues(prev => ({
                               ...prev,
                               [product.id]: processedValue
                             }));
