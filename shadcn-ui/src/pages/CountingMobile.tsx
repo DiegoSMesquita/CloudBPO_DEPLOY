@@ -735,19 +735,19 @@ const CountingMobile: React.FC = () => {
     return item?.quantity || 0;
   };
 
-  // Função para atualizar input da calculadora
+  // CORREÇÃO: Função para atualizar input da calculadora - ACEITA VÍRGULA
   const updateCalculatorInput = (productId: string, value: string) => {
-    const numericValue = handleNumericInput(value);
+    const processedValue = handleNumericInput(value);
     setCalculatorInputs(prev => ({
       ...prev,
-      [productId]: numericValue
+      [productId]: processedValue
     }));
   };
 
-  // Função para calcular e usar resultado da calculadora
+  // CORREÇÃO: Função para calcular e usar resultado da calculadora - USA VÍRGULA
   const calculateAndUse = (productId: string, conversionFactor: number) => {
     const boxQuantityStr = calculatorInputs[productId] || '0';
-    const boxQuantity = parseInt(boxQuantityStr) || 0;
+    const boxQuantity = parseDecimalInput(boxQuantityStr); // CORREÇÃO: Usar parseDecimalInput
     const calculatedUnits = boxQuantity * conversionFactor;
     
     // Atualizar quantidade do produto
@@ -761,7 +761,9 @@ const CountingMobile: React.FC = () => {
     
     // Mostrar feedback
     const productUnit = getProductUnit(products.find(p => p.id === productId) || {} as Product);
-    showToast(`${boxQuantity} caixas = ${calculatedUnits} ${productUnit}`, 'success');
+    const formattedBoxQuantity = boxQuantityStr.includes(',') ? boxQuantityStr : boxQuantity.toString();
+    const formattedResult = calculatedUnits.toString().replace('.', ',');
+    showToast(`${formattedBoxQuantity} caixas = ${formattedResult} ${productUnit}`, 'success');
   };
 
   const filteredProducts = products.filter(product => {
@@ -1271,7 +1273,7 @@ const CountingMobile: React.FC = () => {
               const quantity = getProductQuantity(product.id);
               const isSaving = savingItems.has(product.id);
               const boxQuantityStr = calculatorInputs[product.id] || '';
-              const boxQuantity = parseInt(boxQuantityStr) || 0;
+              const boxQuantity = parseDecimalInput(boxQuantityStr); // CORREÇÃO: Usar parseDecimalInput
               const calculatedUnits = boxQuantity * product.conversionFactor;
               const productUnit = getProductUnit(product);
               
@@ -1292,7 +1294,7 @@ const CountingMobile: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Calculadora de Conversão - RESTORED SECTION */}
+                    {/* Calculadora de Conversão - CORREÇÃO APLICADA */}
                     {product.conversionFactor > 1 && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                         <div className="flex items-center space-x-2 mb-3">
@@ -1310,8 +1312,7 @@ const CountingMobile: React.FC = () => {
                           <div className="flex items-center space-x-2 flex-wrap">
                             <input 
                               type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
+                              inputMode="decimal"
                               placeholder=""
                               value={boxQuantityStr}
                               onChange={(e) => updateCalculatorInput(product.id, e.target.value)}
@@ -1321,7 +1322,7 @@ const CountingMobile: React.FC = () => {
                             <span className="font-medium text-blue-900">{product.conversionFactor}</span>
                             <span className="text-blue-900 font-medium">=</span>
                             <span className="font-bold text-blue-900">
-                              {calculatedUnits} {productUnit}
+                              {calculatedUnits.toString().replace('.', ',')} {productUnit}
                             </span>
                           </div>
                           
@@ -1372,7 +1373,7 @@ const CountingMobile: React.FC = () => {
                           inputMode="decimal"
                           value={quantityInputValue}
                           onChange={(e) => {
-                            const processedValue = handleNumericInput(e.target.value, productUnit);
+                            const processedValue = handleNumericInput(e.target.value);
                             
                             console.log('🔍 VÍRGULA INPUT:', { 
                               original: e.target.value, 
@@ -1388,15 +1389,8 @@ const CountingMobile: React.FC = () => {
                             }));
                             
                             // Converter para número e atualizar estado
-                            if (allowsFractionalInput(productUnit)) {
-                              // Para unidades que permitem vírgula, aceitar decimais
-                              const numericValue = processedValue === '' ? 0 : parseFloat(processedValue.replace(',', '.'));
-                              updateQuantity(product.id, isNaN(numericValue) ? 0 : numericValue);
-                            } else {
-                              // Para outras unidades, apenas inteiros
-                              const numericValue = processedValue === '' ? 0 : parseInt(processedValue);
-                              updateQuantity(product.id, numericValue);
-                            }
+                            const numericValue = parseDecimalInput(processedValue);
+                            updateQuantity(product.id, numericValue);
                           }}
                           className="w-20 px-3 py-3 border border-gray-300 rounded-lg text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder=""
