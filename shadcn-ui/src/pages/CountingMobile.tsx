@@ -6,7 +6,7 @@ import type { Counting, CountingItem, Product, Sector } from '../lib/types';
 
 const CountingMobile: React.FC = () => {
   const { countingId } = useParams<{ countingId: string }>();
-  
+
   const [counting, setCounting] = useState<Counting | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -71,26 +71,26 @@ const CountingMobile: React.FC = () => {
     return fractionalUnits.includes(unitUpper);
   };
 
-  // Helper function to handle numeric input - CORRIGIDO
-  const handleNumericInput = (value: string, unit?: string): string => {
-    const allowsFractional = allowsFractionalInput(unit);
-    
-    console.log('🔍 VÍRGULA DEBUG:', { value, unit, allowsFractional });
-    
-    if (allowsFractional) {
-      // Para unidades que permitem vírgula, aceitar números e vírgula
-      const cleanValue = value.replace(/[^0-9,]/g, '');
-      // Garantir apenas uma vírgula
-      const parts = cleanValue.split(',');
-      if (parts.length > 2) {
-        return parts[0] + ',' + parts.slice(1).join('');
-      }
-      return cleanValue;
-    } else {
-      // Para outras unidades, apenas números inteiros
-      const numericValue = value.replace(/[^0-9]/g, '');
-      return numericValue;
+ 
+  // Helper function to handle numeric input (allows comma for decimals)
+  const handleNumericInput = (value: string): string => {
+    // Allow numbers and comma (Brazilian decimal separator)
+    const numericValue = value.replace(/[^0-9,]/g, '');
+    // Ensure only one comma is present
+    const parts = numericValue.split(',');
+    if (parts.length > 2) {
+      return parts[0] + ',' + parts.slice(1).join('');
     }
+    return numericValue;
+  };
+
+  // Helper function to convert string with comma to number
+  const parseDecimalInput = (value: string): number => {
+    if (!value || value === '') return 0;
+    // Replace comma with dot for parsing
+    const normalized = value.replace(',', '.');
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
   };
 
   // Helper function to check if counting is approved
