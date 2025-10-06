@@ -1317,7 +1317,7 @@ const CountingMobile: React.FC = () => {
                           <div className="flex items-center space-x-2 flex-wrap">
                             <input 
                               type="text"
-                              inputMode="decimal"
+                              inputMode="text"
                               placeholder=""
                               value={boxQuantityStr}
                               onChange={(e) => updateCalculatorInput(product.id, e.target.value)}
@@ -1374,10 +1374,10 @@ const CountingMobile: React.FC = () => {
                           <Minus className="w-6 h-6" />
                         </button>
                         
-                        {/* Quantity Input - CORREÇÃO APLICADA */}
+                        {/* Quantity Input - CORREÇÃO CRÍTICA: inputMode="text" */}
                         <input
                           type="text"
-                          inputMode="decimal"
+                          inputMode="text"
                           value={quantityInputValue}
                           onChange={(e) => {
                             const processedValue = handleNumericInput(e.target.value, productUnit);
