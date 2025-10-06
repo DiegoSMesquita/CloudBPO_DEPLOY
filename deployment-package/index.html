@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/assets/icone-azul-C7jp0BBT.png" type="image/png">
+    <title>CloudBPO - Sistema de Gestão Financeira</title>
+    
+    <!-- EMERGENCY FIX: Immediate redirect for mobile counting routes -->
+    <script>
+        console.log('🚨 EMERGENCY FIX: Iniciando correção de emergência...');
+        
+        (function() {
+            const path = window.location.pathname;
+            const search = window.location.search;
+            const hash = window.location.hash;
+            
+            console.log('Current path:', path);
+            console.log('Current search:', search);
+            console.log('Current hash:', hash);
+            
+            // Check if it's a mobile counting route that needs redirect
+            const needsRedirect = (
+                path.match(/^\/mobile\/counting\/[a-f0-9-]+$/) ||
+                path.match(/^\/counting\/[a-f0-9-]+$/) ||
+                path.startsWith('/login') ||
+                path.startsWith('/dashboard')
+            ) && !hash.includes(path);
+            
+            if (needsRedirect) {
+                console.log('🎯 EMERGENCY FIX: Redirecting to hash route...');
+                const newUrl = window.location.origin + '/#' + path + search;
+                console.log('New URL:', newUrl);
+                window.location.replace(newUrl);
+                return;
+            }
+            
+            console.log('✅ EMERGENCY FIX: No redirect needed');
+        })();
+    </script>
+    
+    <script type="module" crossorigin src="/assets/index-DRQnp89R.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Zop_pbiR.css">
+</head>
+<body>
+    <div id="root">
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div style="text-align: center; background: rgba(255,255,255,0.1); padding: 40px; border-radius: 15px; backdrop-filter: blur(10px);">
+                <div style="width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.3); border-top: 5px solid white; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                <h2>CloudBPO</h2>
+                <p>Carregando sistema...</p>
+            </div>
+        </div>
+        <style>
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+    </div>
+</body>
+</html>

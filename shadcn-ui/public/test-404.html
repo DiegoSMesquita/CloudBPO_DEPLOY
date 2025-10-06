@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Rotas - CloudBPO</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2563eb; }
+        .test-link {
+            display: block;
+            padding: 10px 15px;
+            margin: 10px 0;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .test-link:hover {
+            background: #2563eb;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #dcfce7; color: #166534; }
+        .error { background: #fef2f2; color: #dc2626; }
+        .info { background: #dbeafe; color: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Teste de Rotas Mobile - CloudBPO</h1>
+        
+        <div class="status info">
+            <strong>Status:</strong> Testando rotas de contagem mobile
+        </div>
+
+        <h2>Rotas para Testar:</h2>
+        
+        <h3>Rotas BrowserRouter (atuais):</h3>
+        <a href="/mobile/counting/123" class="test-link" target="_blank">
+            /mobile/counting/123
+        </a>
+        <a href="/mobile/counting/test-share-link" class="test-link" target="_blank">
+            /mobile/counting/test-share-link
+        </a>
+        <a href="/counting/456" class="test-link" target="_blank">
+            /counting/456
+        </a>
+        <a href="/counting/another-test" class="test-link" target="_blank">
+            /counting/another-test
+        </a>
+
+        <h3>Rotas HashRouter (fallback):</h3>
+        <a href="/#/mobile/counting/123" class="test-link" target="_blank">
+            /#/mobile/counting/123
+        </a>
+        <a href="/#/mobile/counting/test-share-link" class="test-link" target="_blank">
+            /#/mobile/counting/test-share-link
+        </a>
+        <a href="/#/counting/456" class="test-link" target="_blank">
+            /#/counting/456
+        </a>
+        <a href="/#/counting/another-test" class="test-link" target="_blank">
+            /#/counting/another-test
+        </a>
+
+        <h2>Informações do Sistema:</h2>
+        <div class="status info">
+            <strong>URL Atual:</strong> <span id="current-url"></span><br>
+            <strong>User Agent:</strong> <span id="user-agent"></span><br>
+            <strong>Timestamp:</strong> <span id="timestamp"></span>
+        </div>
+
+        <h2>Instruções:</h2>
+        <ol>
+            <li>Clique em cada link acima</li>
+            <li>Verifique se carrega a página de contagem mobile</li>
+            <li>Se algum link retornar 404, anote qual</li>
+            <li>Teste em diferentes dispositivos (desktop, mobile, tablet)</li>
+        </ol>
+
+        <div class="status error">
+            <strong>Se ainda houver 404:</strong><br>
+            1. Limpe o cache do navegador (Ctrl+Shift+R)<br>
+            2. Teste em modo incógnito<br>
+            3. Verifique se o servidor foi reiniciado após o deploy
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('current-url').textContent = window.location.href;
+        document.getElementById('user-agent').textContent = navigator.userAgent;
+        document.getElementById('timestamp').textContent = new Date().toLocaleString('pt-BR');
+    </script>
+</body>
+</html>

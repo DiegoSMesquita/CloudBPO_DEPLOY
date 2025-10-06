@@ -1,0 +1,39 @@
+{
+  "rewrites": [
+    {
+      "source": "/mobile/counting/(.*)",
+      "destination": "/#/mobile/counting/$1"
+    },
+    {
+      "source": "/counting/(.*)",
+      "destination": "/#/counting/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/mobile/counting/(.*)",
+      "destination": "/#/mobile/counting/$1",
+      "permanent": false
+    },
+    {
+      "source": "/counting/(.*)",
+      "destination": "/#/counting/$1",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ]
+}

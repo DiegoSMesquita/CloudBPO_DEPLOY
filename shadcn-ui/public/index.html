@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/assets/icone-azul-C7jp0BBT.png" type="image/png">
+  <title>CloudBPO - Sistema de Gestão Financeira</title>
+  <meta name="description" content="CloudBPO - Sistema Completo de Gestão Financeira e Estoque" />
+  <meta name="author" content="CloudBPO" />
+  
+  <!-- CRITICAL: Base tag for proper SPA routing -->
+  <base href="/" />
+  
+  <meta property="og:title" content="CloudBPO - Sistema de Gestão Financeira" />
+  <meta property="og:description" content="CloudBPO - Sistema Completo de Gestão Financeira e Estoque" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/assets/logo-azul.png" />
+  
+  <!-- SOLUÇÃO DEFINITIVA: Redirecionamento JavaScript para HashRouter -->
+  <script>
+    (function() {
+      console.log('🔍 REDIRECT SCRIPT: Iniciando verificação...');
+      console.log('🔍 REDIRECT SCRIPT: URL atual:', window.location.href);
+      console.log('🔍 REDIRECT SCRIPT: Pathname:', window.location.pathname);
+      console.log('🔍 REDIRECT SCRIPT: Hash:', window.location.hash);
+      
+      // Detectar se é uma rota mobile SEM hash
+      const path = window.location.pathname;
+      const isMobileRoute = path.includes('/mobile/counting/') || path.includes('/counting/');
+      const hasHash = window.location.hash.length > 0;
+      
+      console.log('🔍 REDIRECT SCRIPT: É rota mobile?', isMobileRoute);
+      console.log('🔍 REDIRECT SCRIPT: Tem hash?', hasHash);
+      
+      if (isMobileRoute && !hasHash) {
+        console.log('🚀 REDIRECT SCRIPT: REDIRECIONANDO PARA HASHROUTER!');
+        const newUrl = window.location.origin + '/#' + path + window.location.search;
+        console.log('🚀 REDIRECT SCRIPT: Nova URL:', newUrl);
+        window.location.replace(newUrl);
+      } else if (isMobileRoute && hasHash) {
+        console.log('✅ REDIRECT SCRIPT: Rota mobile com hash - OK');
+      } else {
+        console.log('ℹ️ REDIRECT SCRIPT: Rota normal - sem redirecionamento');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

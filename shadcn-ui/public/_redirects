@@ -1,0 +1,12 @@
+# Netlify/Vercel redirects for SPA
+# Todas as rotas não encontradas devem ir para 404.html que fará o redirecionamento
+
+# Rotas específicas do sistema
+/mobile/counting/* /404.html 200
+/counting/* /404.html 200
+/login /404.html 200
+/dashboard /404.html 200
+/dashboard/* /404.html 200
+
+# Fallback geral - qualquer rota não encontrada
+/* /404.html 200

@@ -1,0 +1,77 @@
+sequenceDiagram
+    participant U as User/Admin
+    participant FP as FinancialPage
+    participant CS as CompanyService
+    participant PS as PlanService
+    participant IS as InvoiceService
+    participant BA as BillingAutomation
+    participant DB as Supabase
+    participant AL as AdminActivityLog
+
+    %% Initial Load
+    U->>FP: Load Financial Page
+    FP->>CS: fetchAllCompanies()
+    CS->>DB: SELECT * FROM companies
+    DB-->>CS: companies data
+    FP->>PS: fetchAllPlans()
+    PS->>DB: SELECT * FROM subscription_plans
+    DB-->>PS: plans data
+    FP->>IS: fetchDashboardMetrics()
+    IS->>DB: SELECT metrics queries
+    DB-->>IS: metrics data
+    FP-->>U: Display Dashboard
+
+    %% Company Management Flow
+    U->>FP: Select Company Tab
+    FP->>CS: fetchCompaniesWithSubscriptions()
+    CS->>DB: JOIN companies, subscriptions, plans
+    DB-->>CS: enriched company data
+    FP-->>U: Display Companies List
+
+    U->>FP: Block Company Action
+    FP->>CS: blockCompany(companyId, reason)
+    CS->>DB: UPDATE company_subscriptions SET status='blocked'
+    CS->>AL: log(BLOCK_COMPANY, data)
+    AL->>DB: INSERT INTO admin_activity_logs
+    DB-->>CS: success
+    CS-->>FP: company blocked
+    FP-->>U: Show success message
+
+    %% Plan Management Flow
+    U->>FP: Create New Plan
+    FP->>PS: createPlan(planData)
+    PS->>DB: INSERT INTO subscription_plans
+    PS->>AL: log(CREATE_PLAN, planData)
+    AL->>DB: INSERT INTO admin_activity_logs
+    DB-->>PS: plan created
+    PS-->>FP: plan data
+    FP-->>U: Show success, refresh plans
+
+    %% Billing Flow
+    U->>FP: Generate Invoice
+    FP->>IS: generateInvoice(companyId)
+    IS->>DB: INSERT INTO invoices
+    IS->>CS: updateSubscriptionStatus()
+    CS->>DB: UPDATE company_subscriptions
+    IS->>AL: log(GENERATE_INVOICE, invoiceData)
+    AL->>DB: INSERT INTO admin_activity_logs
+    DB-->>IS: invoice created
+    IS-->>FP: invoice data
+    FP-->>U: Show invoice generated
+
+    %% Automated Billing Process
+    BA->>BA: run() - Scheduled Task
+    BA->>CS: getExpiringSubscriptions()
+    CS->>DB: SELECT subscriptions WHERE end_date <= NOW() + 7 days
+    DB-->>CS: expiring subscriptions
+    BA->>IS: generateMonthlyInvoices(subscriptions)
+    IS->>DB: INSERT INTO invoices (batch)
+    BA->>CS: sendExpirationWarnings()
+    CS->>DB: UPDATE notification_sent flags
+    BA->>CS: autoBlockExpiredAccounts()
+    CS->>DB: UPDATE subscriptions SET status='blocked'
+
+    %% Real-time Updates
+    DB->>FP: Real-time subscription changes
+    FP->>FP: updateCompanyStatus()
+    FP-->>U: Refresh UI with new status

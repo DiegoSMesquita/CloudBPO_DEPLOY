@@ -1,0 +1,31 @@
+[build]
+  publish = "dist"
+  command = "pnpm run build"
+
+[[redirects]]
+  from = "/mobile/counting/*"
+  to = "/404.html"
+  status = 200
+
+[[redirects]]
+  from = "/counting/*"
+  to = "/404.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/404.html"
+  status = 200
+
+[[redirects]]
+  from = "/dashboard/*"
+  to = "/404.html"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/404.html"
+  status = 200
+
+[build.environment]
+  NODE_VERSION = "18"

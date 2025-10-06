@@ -1,0 +1,23 @@
+# CloudBPO - Apache configuration for SPA routing
+RewriteEngine On
+
+# Handle mobile counting routes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^mobile/counting/[a-f0-9-]+$ /index.html [L]
+
+# Handle other system routes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(counting|login|dashboard) /index.html [L]
+
+# General SPA fallback
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
+
+# Security headers
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options DENY
+    Header always set X-Content-Type-Options nosniff
+</IfModule>

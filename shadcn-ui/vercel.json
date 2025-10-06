@@ -1,0 +1,39 @@
+{
+  "rewrites": [
+    {
+      "source": "/mobile/counting/(.*)",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/counting/(.*)",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/dashboard(.*)",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/404.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ]
+}
