@@ -2,13 +2,13 @@ import React from 'react';
 import { Settings as SettingsIcon, Info, User, Bell, Shield, Palette, Database, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
+import { getVersionInfo } from '@/utils/version';
 
 const Settings: React.FC = () => {
   const { authState } = useAuth();
-
-  // Version information
-  const currentVersion = "18";
-  const releaseDate = "28/09/2025";
+  
+  // Get dynamic version information
+  const versionInfo = getVersionInfo();
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -124,7 +124,7 @@ const Settings: React.FC = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Version Information */}
+          {/* Version Information - NOW DYNAMIC */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-blue-100 rounded-lg">
@@ -136,20 +136,25 @@ const Settings: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Versão Atual:</span>
                 <Badge variant="default" className="bg-blue-600 text-white font-semibold">
-                  Versão {currentVersion}
+                  {versionInfo.displayVersion}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Data de Release:</span>
-                <span className="text-sm text-gray-600">{releaseDate}</span>
+                <span className="text-sm text-gray-600">{versionInfo.releaseDate}</span>
               </div>
               <div className="pt-2 border-t border-gray-200">
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="font-medium">Sistema Atualizado</span>
+                  <span className="font-medium">
+                    {versionInfo.isLatest ? 'Sistema Atualizado' : 'Atualização Disponível'}
+                  </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Você está usando a versão mais recente do CloudBPO
+                  {versionInfo.isLatest 
+                    ? 'Você está usando a versão mais recente do CloudBPO'
+                    : 'Uma nova versão está disponível para download'
+                  }
                 </p>
               </div>
             </div>
@@ -173,6 +178,10 @@ const Settings: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-gray-600">Servidor:</span>
                 <span className="text-gray-900">Brasil - SP</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Versão Técnica:</span>
+                <span className="text-gray-900 font-mono text-xs">{versionInfo.version}</span>
               </div>
             </div>
           </div>
