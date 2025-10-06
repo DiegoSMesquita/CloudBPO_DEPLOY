@@ -12,7 +12,7 @@ const CountingMobile: React.FC = () => {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [countingItems, setCountingItems] = useState<CountingItem[]>([]);
   const [companyName, setCompanyName] = useState<string>('');
-  const [employeeName, setEmployeeName] = useState<string>(''); // CORREÇÃO: Novo estado para nome do funcionário
+  const [employeeName, setEmployeeName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSector, setSelectedSector] = useState<string>('');
@@ -30,6 +30,9 @@ const CountingMobile: React.FC = () => {
   
   // Estado para calculadora de conversão
   const [calculatorInputs, setCalculatorInputs] = useState<{[productId: string]: string}>({});
+  
+  // CORREÇÃO: Estado para controlar valores de input de quantidade
+  const [quantityInputs, setQuantityInputs] = useState<{[productId: string]: string}>({});
 
   // Use correct table names with system prefix
   const COUNTING_ITEMS_TABLE = 'app_0bcfd220f3_counting_items';
@@ -73,6 +76,19 @@ const CountingMobile: React.FC = () => {
   // Helper function to get product unit for display
   const getProductUnit = (product: Product): string => {
     return product.unit || product.alternativeUnit || 'unidades';
+  };
+
+  // CORREÇÃO: Função para formatar quantidade para exibição
+  const formatQuantityForDisplay = (quantity: number, unit: string): string => {
+    const allowsFractional = ['KILO', 'KG', 'GRAMA', 'GR'].includes(unit.toUpperCase());
+    
+    if (allowsFractional) {
+      // Para unidades de peso, mostrar com vírgula se for decimal
+      return quantity.toString().replace('.', ',');
+    } else {
+      // Para outras unidades, mostrar como inteiro
+      return Math.floor(quantity).toString();
+    }
   };
 
   // CORREÇÃO: Função para buscar nome do usuário pelo ID
@@ -519,6 +535,18 @@ const CountingMobile: React.FC = () => {
             updatedAt: item.updated_at
           }));
           setCountingItems(mappedItems);
+          
+          // CORREÇÃO: Inicializar inputs de quantidade com valores existentes
+          const initialQuantityInputs: {[productId: string]: string} = {};
+          mappedItems.forEach(item => {
+            const product = mappedProducts.find(p => p.id === item.productId);
+            if (product) {
+              const unit = getProductUnit(product);
+              initialQuantityInputs[item.productId] = formatQuantityForDisplay(item.quantity, unit);
+            }
+          });
+          setQuantityInputs(initialQuantityInputs);
+          
           console.log('✅ MOBILE: Itens contados carregados:', mappedItems.length);
         } else {
           setCountingItems([]);
@@ -663,6 +691,17 @@ const CountingMobile: React.FC = () => {
         }];
       }
     });
+    
+    // CORREÇÃO: Atualizar também o input de quantidade
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      const unit = getProductUnit(product);
+      const displayValue = formatQuantityForDisplay(quantity, unit);
+      setQuantityInputs(prev => ({
+        ...prev,
+        [productId]: displayValue
+      }));
+    }
   };
 
   const getProductQuantity = (productId: string): number => {
@@ -1210,6 +1249,9 @@ const CountingMobile: React.FC = () => {
               const calculatedUnits = boxQuantity * product.conversionFactor;
               const productUnit = getProductUnit(product);
               
+              // CORREÇÃO: Usar valor do input de quantidade
+              const quantityInputValue = quantityInputs[product.id] || (quantity === 0 ? '' : formatQuantityForDisplay(quantity, productUnit));
+              
               return (
                 <div key={product.id} className="bg-white rounded-lg shadow-sm border p-4">
                   <div className="space-y-4">
@@ -1294,22 +1336,27 @@ const CountingMobile: React.FC = () => {
                           <Minus className="w-6 h-6" />
                         </button>
                         
-                        {/* Quantity Input */}
+                        {/* Quantity Input - CORREÇÃO APLICADA */}
                         <input
                           type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={quantity === 0 ? '' : quantity.toString()}
+                          inputMode="decimal"
+                          value={quantityInputValue}
                           onChange={(e) => {
-                            const productUnit = getProductUnit(product);
                             const processedValue = handleNumericInput(e.target.value, productUnit);
                             
-                            if (productUnit && ['KILO', 'KG', 'GRAMA', 'GR'].includes(productUnit.toUpperCase())) {
-                              // For weight units, handle fractional values
+                            // Atualizar input visual
+                            setQuantityInputs(prev => ({
+                              ...prev,
+                              [product.id]: processedValue
+                            }));
+                            
+                            // Converter para número e atualizar estado
+                            if (['KILO', 'KG', 'GRAMA', 'GR'].includes(productUnit.toUpperCase())) {
+                              // Para unidades de peso, aceitar vírgula
                               const numericValue = processedValue === '' ? 0 : parseFloat(processedValue.replace(',', '.'));
                               updateQuantity(product.id, isNaN(numericValue) ? 0 : numericValue);
                             } else {
-                              // For other units, use integer values (current behavior)
+                              // Para outras unidades, apenas inteiros
                               const numericValue = processedValue === '' ? 0 : parseInt(processedValue);
                               updateQuantity(product.id, numericValue);
                             }
