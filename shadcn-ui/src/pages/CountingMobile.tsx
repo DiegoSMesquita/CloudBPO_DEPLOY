@@ -1358,33 +1358,41 @@ const CountingMobile: React.FC = () => {
                           <Minus className="w-6 h-6" />
                         </button>
                         
-                        {/* SOLUÇÃO SÊNIOR: Campo de quantidade SIMPLIFICADO */}
+                        {/* CORREÇÃO FINAL: Campo de quantidade com inputMode="decimal" e lógica simplificada */}
                         <input
                           type="text"
-                          inputMode="text"
+                          inputMode="decimal"
                           value={quantityInputValue}
                           onChange={(e) => {
                             const inputValue = e.target.value;
                             
-                            // SOLUÇÃO SÊNIOR: Deixar o usuário digitar livremente primeiro
+                            // Permitir digitação livre primeiro - não processar em tempo real
                             setQuantityInputs(prev => ({
                               ...prev,
                               [product.id]: inputValue
                             }));
-                            
-                            // Processar apenas no final para conversão numérica
+                          }}
+                          onBlur={(e) => {
+                            // Processar apenas quando o usuário sair do campo
+                            const inputValue = e.target.value;
                             let processedValue = inputValue;
+                            
                             if (!allowsFractionalInput(productUnit)) {
-                              // Para UNIDADE: remover vírgula apenas na conversão
+                              // Para UNIDADE: remover vírgula
                               processedValue = inputValue.replace(/[^0-9]/g, '');
                             } else {
-                              // Para KILO/GRAMA: aceitar vírgula na conversão
+                              // Para KILO/GRAMA: aceitar vírgula
                               processedValue = inputValue.replace(/[^0-9,]/g, '');
                               const parts = processedValue.split(',');
                               if (parts.length > 2) {
                                 processedValue = parts[0] + ',' + parts.slice(1).join('');
                               }
                             }
+                            
+                            setQuantityInputs(prev => ({
+                              ...prev,
+                              [product.id]: processedValue
+                            }));
                             
                             const numericValue = parseDecimalInput(processedValue);
                             updateQuantity(product.id, numericValue);
