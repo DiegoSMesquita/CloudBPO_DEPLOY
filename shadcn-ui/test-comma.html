@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Vírgula</title>
+</head>
+<body>
+    <h1>Teste de Input com Vírgula</h1>
+    
+    <div>
+        <label>Produto KILO (deve aceitar vírgula):</label>
+        <input type="text" id="input-kilo" inputMode="decimal" placeholder="Digite 2,5">
+    </div>
+    
+    <div>
+        <label>Produto UNIDADE (só números):</label>
+        <input type="text" id="input-unit" inputMode="numeric" placeholder="Digite 25">
+    </div>
+    
+    <div id="result"></div>
+
+    <script>
+        // Função igual ao código React
+        const handleNumericInput = (value, unit) => {
+            const allowsFractional = unit && ['KILO', 'KG', 'GRAMA', 'GR'].includes(unit.toUpperCase());
+            
+            if (allowsFractional) {
+                const cleanValue = value.replace(/[^0-9,]/g, '');
+                const parts = cleanValue.split(',');
+                if (parts.length > 2) {
+                    return parts[0] + ',' + parts.slice(1).join('');
+                }
+                return cleanValue;
+            } else {
+                const numericValue = value.replace(/[^0-9]/g, '');
+                return numericValue;
+            }
+        };
+
+        document.getElementById('input-kilo').addEventListener('input', function(e) {
+            const processed = handleNumericInput(e.target.value, 'KILO');
+            e.target.value = processed;
+            document.getElementById('result').innerHTML = `KILO: "${processed}"`;
+        });
+
+        document.getElementById('input-unit').addEventListener('input', function(e) {
+            const processed = handleNumericInput(e.target.value, 'UNIDADE');
+            e.target.value = processed;
+            document.getElementById('result').innerHTML = `UNIDADE: "${processed}"`;
+        });
+    </script>
+</body>
+</html>
