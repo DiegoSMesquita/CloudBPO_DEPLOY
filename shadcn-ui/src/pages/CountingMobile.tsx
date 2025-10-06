@@ -52,36 +52,41 @@ const CountingMobile: React.FC = () => {
     
     const unitUpper = unit.toUpperCase().trim();
     
-    // Lista expandida de unidades que permitem vírgula
-    const fractionalUnits = [
-      'KILO', 'KG', 'KILOS', 'QUILOS',
-      'GRAMA', 'GR', 'GRAMAS', 'G',
-      'LITRO', 'L', 'LITROS', 'LT',
-      'ML', 'MILILITRO', 'MILILITROS',
-      'METRO', 'M', 'METROS', 'MT',
-      'CM', 'CENTIMETRO', 'CENTIMETROS',
-      'MM', 'MILIMETRO', 'MILIMETROS',
-      'KM', 'QUILOMETRO', 'QUILOMETROS',
-      'M²', 'M2', 'METRO²', 'METRO2',
-      'CM²', 'CM2', 'CENTIMETRO²', 'CENTIMETRO2',
-      'M³', 'M3', 'METRO³', 'METRO3',
-      'TON', 'TONELADA', 'TONELADAS', 'T'
+    // Lista de unidades que NÃO permitem vírgula (apenas inteiros)
+    const integerOnlyUnits = [
+      'UNIDADE', 'UNIDADES', 'UNID', 'UND', 'UN',
+      'PEÇA', 'PEÇAS', 'PC', 'PCS',
+      'CAIXA', 'CAIXAS', 'CX',
+      'PACOTE', 'PACOTES', 'PCT',
+      'FRASCO', 'FRASCOS',
+      'TUBO', 'TUBOS',
+      'ROLO', 'ROLOS'
     ];
     
-    return fractionalUnits.includes(unitUpper);
+    // Se está na lista de unidades inteiras, NÃO permite vírgula
+    return !integerOnlyUnits.includes(unitUpper);
   };
 
- 
-  // Helper function to handle numeric input (allows comma for decimals)
-  const handleNumericInput = (value: string): string => {
-    // Allow numbers and comma (Brazilian decimal separator)
-    const numericValue = value.replace(/[^0-9,]/g, '');
-    // Ensure only one comma is present
-    const parts = numericValue.split(',');
-    if (parts.length > 2) {
-      return parts[0] + ',' + parts.slice(1).join('');
+  // CORREÇÃO: Função para processar input baseado na unidade
+  const handleNumericInput = (value: string, unit?: string): string => {
+    const allowsFractional = allowsFractionalInput(unit);
+    
+    console.log('🔍 VÍRGULA DEBUG:', { value, unit, allowsFractional });
+    
+    if (allowsFractional) {
+      // Para unidades que permitem vírgula, aceitar números e vírgula
+      const cleanValue = value.replace(/[^0-9,]/g, '');
+      // Garantir apenas uma vírgula
+      const parts = cleanValue.split(',');
+      if (parts.length > 2) {
+        return parts[0] + ',' + parts.slice(1).join('');
+      }
+      return cleanValue;
+    } else {
+      // Para unidades de UNIDADE/UNID/UND, apenas números inteiros
+      const numericValue = value.replace(/[^0-9]/g, '');
+      return numericValue;
     }
-    return numericValue;
   };
 
   // Helper function to convert string with comma to number
@@ -737,7 +742,7 @@ const CountingMobile: React.FC = () => {
 
   // CORREÇÃO: Função para atualizar input da calculadora - ACEITA VÍRGULA
   const updateCalculatorInput = (productId: string, value: string) => {
-    const processedValue = handleNumericInput(value);
+    const processedValue = handleNumericInput(value, 'KILO'); // Calculadora sempre aceita vírgula
     setCalculatorInputs(prev => ({
       ...prev,
       [productId]: processedValue
@@ -1351,9 +1356,11 @@ const CountingMobile: React.FC = () => {
                     <div className="border-t pt-4">
                       <div className="mb-4">
                         <span className="text-base font-bold text-gray-900">Quantidade:</span>
-                        {/* CORREÇÃO: Mostrar se aceita vírgula */}
-                        {allowsFractionalInput(productUnit) && (
+                        {/* CORREÇÃO: Mostrar indicador baseado na unidade específica */}
+                        {allowsFractionalInput(productUnit) ? (
                           <span className="text-xs text-green-600 ml-2">(aceita vírgula)</span>
+                        ) : (
+                          <span className="text-xs text-orange-600 ml-2">(apenas números inteiros)</span>
                         )}
                       </div>
                       
@@ -1373,7 +1380,7 @@ const CountingMobile: React.FC = () => {
                           inputMode="decimal"
                           value={quantityInputValue}
                           onChange={(e) => {
-                            const processedValue = handleNumericInput(e.target.value);
+                            const processedValue = handleNumericInput(e.target.value, productUnit);
                             
                             console.log('🔍 VÍRGULA INPUT:', { 
                               original: e.target.value, 
