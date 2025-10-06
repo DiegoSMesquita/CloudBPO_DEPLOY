@@ -1358,40 +1358,36 @@ const CountingMobile: React.FC = () => {
                           <Minus className="w-6 h-6" />
                         </button>
                         
-                        {/* FOCO: Campo de quantidade com vírgula */}
+                        {/* SOLUÇÃO SÊNIOR: Campo de quantidade SIMPLIFICADO */}
                         <input
                           type="text"
-                          inputMode="decimal"
+                          inputMode="text"
                           value={quantityInputValue}
                           onChange={(e) => {
                             const inputValue = e.target.value;
                             
+                            // SOLUÇÃO SÊNIOR: Deixar o usuário digitar livremente primeiro
+                            setQuantityInputs(prev => ({
+                              ...prev,
+                              [product.id]: inputValue
+                            }));
+                            
+                            // Processar apenas no final para conversão numérica
+                            let processedValue = inputValue;
                             if (!allowsFractionalInput(productUnit)) {
-                              // Para unidades que não permitem vírgula, remover vírgulas e pontos
-                              const integerValue = inputValue.replace(/[^0-9]/g, '');
-                              setQuantityInputs(prev => ({
-                                ...prev,
-                                [product.id]: integerValue
-                              }));
-                              const numericValue = parseInt(integerValue) || 0;
-                              updateQuantity(product.id, numericValue);
+                              // Para UNIDADE: remover vírgula apenas na conversão
+                              processedValue = inputValue.replace(/[^0-9]/g, '');
                             } else {
-                              // Para outras unidades, aceitar vírgula
-                              const cleanValue = inputValue.replace(/[^0-9,]/g, '');
-                              const parts = cleanValue.split(',');
-                              let processedValue = cleanValue;
+                              // Para KILO/GRAMA: aceitar vírgula na conversão
+                              processedValue = inputValue.replace(/[^0-9,]/g, '');
+                              const parts = processedValue.split(',');
                               if (parts.length > 2) {
                                 processedValue = parts[0] + ',' + parts.slice(1).join('');
                               }
-                              
-                              setQuantityInputs(prev => ({
-                                ...prev,
-                                [product.id]: processedValue
-                              }));
-                              
-                              const numericValue = parseDecimalInput(processedValue);
-                              updateQuantity(product.id, numericValue);
                             }
+                            
+                            const numericValue = parseDecimalInput(processedValue);
+                            updateQuantity(product.id, numericValue);
                           }}
                           className="w-20 px-3 py-3 border border-gray-300 rounded-lg text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="0"
