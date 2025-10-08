@@ -27,6 +27,11 @@ const CountingMobile: React.FC = () => {
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Estado para produtos filtrados
+  //AQUI COLOCAR NOVO FILTRO 
+  // Estado para controle do filtro de não contados
+const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
   
   // Estado para calculadora de conversão - RESTAURADO
   const [calculatorInputs, setCalculatorInputs] = useState<{[productId: string]: string}>({});
@@ -1259,7 +1264,7 @@ const CountingMobile: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4 p-4">
-            {filteredProducts.map((product) => {
+            {user.map((product) => {
               const quantity = getProductQuantity(product.id);
               const isSaving = savingItems.has(product.id);
               const boxQuantityStr = calculatorInputs[product.id] || '';
