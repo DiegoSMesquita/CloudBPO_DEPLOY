@@ -28,6 +28,8 @@ import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 // Import CloudBPO logo
 import logoAzul from '@/assets/images/logo-azul.png';
+import { useCompany } from '@/contexts/CompanyContext';
+import Companies from './Companies';
 
 // Types for counting system
 interface Sector {
@@ -860,7 +862,7 @@ const Countings: React.FC = () => {
   const [createdCounting, setCreatedCounting] = useState<Counting | null>(null);
   const [extendHours, setExtendHours] = useState(2);
   const ITEMS_PER_PAGE = 20;
-  
+  const [companyName, setCompanyName] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
@@ -961,6 +963,7 @@ const Countings: React.FC = () => {
         const countingInfo = [
           `ID: ${counting.internalId || 'N/A'}`,
           `Nome: ${counting.name || 'Sem nome'}`,
+          `Empresa: ${companyName.toUpperCase|| 'Sem Empresa'}`,
           `Status: ${getStatusBadge(counting).label}`,
           `Funcionário: ${counting.employee_name || 'Não atribuído'}`,
           `Data Agendada: ${counting.scheduledDate ? format(new Date(counting.scheduledDate), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}`,

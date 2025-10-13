@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Search, Filter, Save, CheckCircle, Clock, Package, AlertTriangle, Plus, Minus, Calendar, X } from 'lucide-react';
+import { Search, Filter, Save, CheckCircle, Clock, Package, AlertTriangle, Plus, Minus, Calendar, X, FileText, XCircle } from 'lucide-react';
 import { supabase, TABLES } from '../lib/supabase';
 import type { Counting, CountingItem, Product, Sector } from '../lib/types';
 
@@ -28,22 +28,26 @@ const CountingMobile: React.FC = () => {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Estado para produtos filtrados
-  //AQUI COLOCAR NOVO FILTRO 
-  // Estado para controle do filtro de não contados
-const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
+  // ========== NOVOS ESTADOS ==========
+  // 1. Drawer de filtros
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   
-  // Estado para calculadora de conversão - RESTAURADO
+  // 2. Modal de observações finais
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [finalNotes, setFinalNotes] = useState('');
+  
+  // 3. Produtos indisponíveis ("Não tem")
+  const [unavailableProducts, setUnavailableProducts] = useState<Set<string>>(new Set());
+  
+  // 4. Filtro de status expandido
+  const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted' | 'unavailable'>('all');
+  
   const [calculatorInputs, setCalculatorInputs] = useState<{[productId: string]: string}>({});
-  
-  // Estado para controlar valores de input de quantidade
   const [quantityInputs, setQuantityInputs] = useState<{[productId: string]: string}>({});
 
-  // Use correct table names with system prefix
   const COUNTING_ITEMS_TABLE = 'app_0bcfd220f3_counting_items';
   const COUNTING_SECTORS_TABLE = 'app_0bcfd220f3_counting_sectors';
 
-  // Safe string conversion helper
   const safeString = (value: unknown): string => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'string') return value;
@@ -51,13 +55,9 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     return String(value);
   };
 
-  // Função para verificar se permite vírgula
   const allowsFractionalInput = (unit?: string): boolean => {
     if (!unit) return true;
-    
     const unitUpper = unit.toUpperCase().trim();
-    
-    // Lista de unidades que NÃO permitem vírgula (apenas inteiros)
     const integerOnlyUnits = [
       'UNIDADE', 'UNIDADES', 'UNID', 'UND', 'UN',
       'PEÇA', 'PEÇAS', 'PC', 'PCS',
@@ -67,34 +67,27 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
       'TUBO', 'TUBOS',
       'ROLO', 'ROLOS'
     ];
-    
     return !integerOnlyUnits.includes(unitUpper);
   };
 
-  // Helper function to convert string with comma to number
   const parseDecimalInput = (value: string): number => {
     if (!value || value === '') return 0;
-    // Replace comma with dot for parsing
     const normalized = value.replace(',', '.');
     const parsed = parseFloat(normalized);
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  // Helper function to check if counting is approved
   const isCountingApproved = (status: string): boolean => {
     const normalizedStatus = status.toLowerCase();
     return normalizedStatus === 'approved' || normalizedStatus === 'aprovada';
   };
 
-  // Helper function to get product unit for display
   const getProductUnit = (product: Product): string => {
     return product.unit || product.alternativeUnit || 'unidades';
   };
 
-  // Função para formatar quantidade para exibição
   const formatQuantityForDisplay = (quantity: number, unit: string): string => {
     const allowsFractional = allowsFractionalInput(unit);
-    
     if (allowsFractional) {
       return quantity.toString().replace('.', ',');
     } else {
@@ -102,85 +95,232 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     }
   };
 
-  // Função para buscar nome do usuário pelo ID
   const fetchUserName = async (userId: string): Promise<string> => {
     try {
-      console.log('🔍 CORREÇÃO: Buscando nome do usuário:', userId);
-      
       const { data: userData, error: userError } = await supabase
         .from(TABLES.USERS)
         .select('name')
         .eq('id', userId)
         .single();
       
-      if (userError) {
-        console.error('❌ CORREÇÃO: Erro ao buscar usuário:', userError);
+      if (userError || !userData || !userData.name) {
         return 'Funcionário Não Identificado';
       }
-      
-      if (!userData || !userData.name) {
-        console.log('⚠️ CORREÇÃO: Usuário sem nome encontrado');
-        return 'Funcionário Não Identificado';
-      }
-      
-      console.log('✅ CORREÇÃO: Nome do usuário encontrado:', userData.name);
       return userData.name;
     } catch (error) {
-      console.error('❌ CORREÇÃO: Exceção ao buscar nome do usuário:', error);
       return 'Funcionário Não Identificado';
     }
   };
 
-  // Check if Supabase is available
   const checkSupabaseConnection = async (): Promise<boolean> => {
     try {
-      if (!supabase) {
-        console.error('❌ Supabase client not initialized');
-        return false;
-      }
-      
-      // Test connection with a simple query
-      const { error } = await supabase
-        .from(TABLES.COMPANIES)
-        .select('id')
-        .limit(1);
-      
-      if (error) {
-        console.error('❌ Supabase connection test failed:', error);
-        return false;
-      }
-      
-      console.log('✅ Supabase connection verified');
+      if (!supabase) return false;
+      const { error } = await supabase.from(TABLES.COMPANIES).select('id').limit(1);
+      if (error) return false;
       return true;
     } catch (error) {
-      console.error('❌ Supabase connection check failed:', error);
       return false;
     }
   };
 
-  // Toast notification component
+  // ========== COMPONENTES UI ==========
+  
   const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) => (
     <div className={`fixed top-4 left-4 right-4 z-50 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white p-4 rounded-lg shadow-lg flex items-center justify-between animate-slide-down`}>
       <div className="flex items-center space-x-3">
         <div className={`w-6 h-6 rounded-full ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} flex items-center justify-center`}>
-          {type === 'success' ? (
-            <CheckCircle className="w-4 h-4 text-white" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 text-white" />
-          )}
+          {type === 'success' ? <CheckCircle className="w-4 h-4 text-white" /> : <AlertTriangle className="w-4 h-4 text-white" />}
         </div>
         <span className="font-medium">{message}</span>
       </div>
-      <button
-        onClick={onClose}
-        className="ml-4 text-white hover:text-gray-200 transition-colors"
-      >
+      <button onClick={onClose} className="ml-4 text-white hover:text-gray-200 transition-colors">
         <X className="w-5 h-5" />
       </button>
     </div>
   );
 
-  // Show toast notification
+  // NOVO: Drawer de Filtros
+  const FilterDrawer = () => (
+    <>
+      {/* Overlay */}
+      {showFilterDrawer && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+          onClick={() => setShowFilterDrawer(false)}
+        />
+      )}
+      
+      {/* Drawer */}
+      <div className={`fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${showFilterDrawer ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b bg-blue-600 text-white">
+            <h3 className="text-lg font-bold flex items-center space-x-2">
+              <Filter className="w-5 h-5" />
+              <span>Filtros</span>
+            </h3>
+            <button onClick={() => setShowFilterDrawer(false)} className="hover:bg-blue-700 rounded-full p-1">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* Busca */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Buscar Produto
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Nome ou código..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            {/* Setor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Filtrar por Setor
+              </label>
+              <select
+                value={selectedSector}
+                onChange={(e) => setSelectedSector(e.target.value)}
+                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todos os setores</option>
+                {sectors.map(sector => (
+                  <option key={sector.id} value={sector.id}>
+                    {sector.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status do Produto
+              </label>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setFilterStatus('all')}
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${filterStatus === 'all' ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'}`}
+                >
+                  Todos os Produtos
+                </button>
+                <button
+                  onClick={() => setFilterStatus('uncounted')}
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${filterStatus === 'uncounted' ? 'border-yellow-600 bg-yellow-50 text-yellow-700 font-semibold' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'}`}
+                >
+                  Não Contados
+                </button>
+                <button
+                  onClick={() => setFilterStatus('unavailable')}
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${filterStatus === 'unavailable' ? 'border-red-600 bg-red-50 text-red-700 font-semibold' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'}`}
+                >
+                  Indisponíveis
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Footer */}
+          <div className="p-4 border-t bg-gray-50">
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedSector('');
+                setFilterStatus('all');
+              }}
+              className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  // NOVO: Modal de Observações Finais
+  const NotesModal = () => (
+    <>
+      {showNotesModal && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowNotesModal(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden">
+              {/* Header */}
+              <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-5 h-5" />
+                  <h3 className="text-lg font-bold">Observações Finais</h3>
+                </div>
+                <button onClick={() => setShowNotesModal(false)} className="hover:bg-blue-700 rounded-full p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                <p className="text-gray-700">
+                  Há algo que você gostaria de registrar sobre esta contagem?
+                </p>
+                
+                <textarea
+                  value={finalNotes}
+                  onChange={(e) => setFinalNotes(e.target.value)}
+                  placeholder="Ex: Produto X estava em local diferente, Setor Y precisou ser reorganizado, etc..."
+                  rows={6}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  maxLength={500}
+                />
+                
+                <p className="text-xs text-gray-500 text-right">
+                  {finalNotes.length}/500 caracteres
+                </p>
+              </div>
+              
+              {/* Footer */}
+              <div className="p-4 bg-gray-50 border-t space-y-3">
+                <button
+                  onClick={confirmCompleteCounting}
+                  disabled={completingCounting}
+                  className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 font-semibold transition-colors"
+                >
+                  {completingCounting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Finalizando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Confirmar Finalização</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowNotesModal(false)}
+                  disabled={completingCounting}
+                  className="w-full bg-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-400 disabled:opacity-50 font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToastMessage(message);
     if (type === 'success') {
@@ -192,6 +332,75 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     }
   };
 
+  // ========== FUNÇÕES DE PRODUTOS INDISPONÍVEIS ==========
+  
+  const markAsUnavailable = async (productId: string) => {
+    if (!counting) return;
+
+    try {
+      setUnavailableProducts(prev => new Set(prev).add(productId));
+      updateQuantity(productId, 0);
+      
+      const existingItem = countingItems.find(item => item.productId === productId);
+      
+      const itemData = {
+        counting_id: counting.id,
+        product_id: productId,
+        counted_quantity: 0,
+        quantity: 0,
+        notes: 'Produto não disponível no momento da contagem',
+        is_unavailable: true,
+        counted_by: counting.createdBy,
+        counted_at: new Date().toISOString()
+      };
+
+      if (existingItem && !existingItem.id.startsWith('temp-')) {
+        await supabase
+          .from(COUNTING_ITEMS_TABLE)
+          .update(itemData)
+          .eq('id', existingItem.id);
+      } else {
+        await supabase
+          .from(COUNTING_ITEMS_TABLE)
+          .insert(itemData);
+      }
+      
+      showToast('Produto marcado como indisponível', 'success');
+    } catch (error) {
+      console.error('Erro ao marcar produto:', error);
+      showToast('Erro ao marcar produto', 'error');
+    }
+  };
+
+  const unmarkAsUnavailable = async (productId: string) => {
+    try {
+      setUnavailableProducts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
+      
+      const existingItem = countingItems.find(item => item.productId === productId);
+      if (existingItem && !existingItem.id.startsWith('temp-')) {
+        await supabase
+          .from(COUNTING_ITEMS_TABLE)
+          .update({ 
+            is_unavailable: false,
+            notes: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingItem.id);
+      }
+      
+      showToast('Produto desmarcado como indisponível', 'success');
+    } catch (error) {
+      console.error('Erro ao desmarcar produto:', error);
+      showToast('Erro ao desmarcar produto', 'error');
+    }
+  };
+
+  // ========== EFFECTS ==========
+  
   useEffect(() => {
     if (countingId) {
       loadCountingData();
@@ -201,7 +410,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     }
   }, [countingId]);
 
-  // Update time remaining every minute
   useEffect(() => {
     if (deadline) {
       const updateTimeRemaining = () => {
@@ -223,13 +431,11 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
         if (hours > 0) timeString += `${hours}h `;
         if (minutes > 0) timeString += `${minutes}m`;
         
-        const finalTime = timeString.trim() || '< 1m';
-        setTimeRemaining(finalTime);
+        setTimeRemaining(timeString.trim() || '< 1m');
       };
       
       updateTimeRemaining();
-      const interval = setInterval(updateTimeRemaining, 60000); // Update every minute
-      
+      const interval = setInterval(updateTimeRemaining, 60000);
       return () => clearInterval(interval);
     }
   }, [deadline]);
@@ -246,7 +452,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
 
   const getTimeRemainingColor = (): string => {
     if (!deadline) return 'text-gray-600';
-    
     const now = new Date();
     const timeDiff = deadline.getTime() - now.getTime();
     const hoursRemaining = timeDiff / (1000 * 60 * 60);
@@ -258,36 +463,17 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
   };
 
   const getCountingDeadline = (countingData: Record<string, unknown>): Date | null => {
-    console.log('🔍 Verificando campos de prazo disponíveis:', Object.keys(countingData));
-    
-    // PRIORIDADE 1: scheduled_date + scheduled_time (usado no desktop)
     if (countingData.scheduled_date && countingData.scheduled_time) {
-      const dateTimeString = `${countingData.scheduled_date}T${countingData.scheduled_time}`;
-      console.log('✅ Usando scheduled_date + scheduled_time:', dateTimeString);
-      const scheduledDeadline = new Date(dateTimeString);
-      return scheduledDeadline;
+      return new Date(`${countingData.scheduled_date}T${countingData.scheduled_time}`);
     }
-    
-    // PRIORIDADE 2: due_date
     if (countingData.due_date) {
-      console.log('✅ Usando due_date:', countingData.due_date);
-      const dueDateDeadline = new Date(countingData.due_date as string);
-      return dueDateDeadline;
+      return new Date(countingData.due_date as string);
     }
-    
-    // PRIORIDADE 3: expires_at
     if (countingData.expires_at) {
-      console.log('✅ Usando expires_at:', countingData.expires_at);
-      const expiresDeadline = new Date(countingData.expires_at as string);
-      return expiresDeadline;
+      return new Date(countingData.expires_at as string);
     }
-    
-    // Fallback: 7 dias após criação
-    console.log('⚠️ Nenhum campo de prazo encontrado, usando fallback de 7 dias');
     const createdAt = new Date(countingData.created_at as string);
-    const fallbackDeadline = new Date(createdAt.getTime() + (7 * 24 * 60 * 60 * 1000));
-    
-    return fallbackDeadline;
+    return new Date(createdAt.getTime() + (7 * 24 * 60 * 60 * 1000));
   };
 
   const loadCountingData = async () => {
@@ -296,134 +482,74 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 MOBILE: Carregando dados da contagem:', countingId);
       
-      // First check if Supabase is available
       const supabaseReady = await checkSupabaseConnection();
       if (!supabaseReady) {
-        throw new Error('Erro de conexão com o banco de dados. Verifique sua conexão com a internet.');
+        throw new Error('Erro de conexão com o banco de dados');
       }
       
-      // Buscar contagem por ID
       const { data: countingData, error: countingError } = await supabase
         .from(TABLES.COUNTINGS)
         .select('*')
         .eq('id', countingId)
         .single();
       
-      if (countingError) {
-        console.error('❌ MOBILE: Error loading counting:', countingError);
-        throw new Error(`Erro ao carregar contagem: ${countingError.message}`);
-      }
-      
-      if (!countingData) {
-        console.error('❌ MOBILE: Contagem não encontrada');
-        setError('Contagem não encontrada');
-        return;
+      if (countingError || !countingData) {
+        throw new Error('Erro ao carregar contagem');
       }
 
-      console.log('✅ MOBILE: Contagem carregada:', countingData);
-
-      // CORREÇÃO CRÍTICA: Priorizar employee_name salvo na criação
       let employeeDisplayName = 'Funcionário Não Identificado';
-      
-      console.log('🔍 CORREÇÃO: Verificando campos de nome disponíveis...');
-      console.log('🔍 CORREÇÃO: employee_name:', countingData.employee_name);
-      console.log('🔍 CORREÇÃO: created_by:', countingData.created_by);
-      
-      // PRIORIDADE 1: employee_name (salvo na criação da contagem)
       if (countingData.employee_name && typeof countingData.employee_name === 'string' && countingData.employee_name.trim() !== '') {
         employeeDisplayName = countingData.employee_name.trim();
-        console.log('✅ CORREÇÃO: Usando employee_name salvo na criação:', employeeDisplayName);
-      }
-      // PRIORIDADE 2: Buscar pelo created_by UUID (fallback)
-      else if (countingData.created_by) {
-        console.log('🔍 CORREÇÃO: employee_name não encontrado, buscando por created_by UUID:', countingData.created_by);
+      } else if (countingData.created_by) {
         employeeDisplayName = await fetchUserName(countingData.created_by);
-        console.log('✅ CORREÇÃO: Nome obtido via UUID:', employeeDisplayName);
       }
-      
-      console.log('✅ CORREÇÃO: Nome final do funcionário:', employeeDisplayName);
       setEmployeeName(employeeDisplayName);
 
-      // Extrair ID da contagem para exibição
       const displayId = countingData.internal_id || countingData.id.substring(0, 8);
       setCountingDisplayId(displayId);
 
-      // Verificar prazo da contagem
       const countingDeadline = getCountingDeadline(countingData);
       setDeadline(countingDeadline);
       
-      // Verificar se contagem expirou
-      const now = new Date();
-      if (countingDeadline && now > countingDeadline) {
-        console.log('⚠️ MOBILE: Contagem expirada');
+      if (countingDeadline && new Date() > countingDeadline) {
         setIsExpired(true);
         setLoading(false);
         return;
       }
 
-      // CORREÇÃO CRÍTICA: Buscar setores com fallback robusto
       let sectorIds: string[] = [];
-      console.log('🔍 MOBILE: ===== BUSCANDO SETORES DA CONTAGEM =====');
-      console.log('🔍 MOBILE: Tabela:', COUNTING_SECTORS_TABLE);
-      console.log('🔍 MOBILE: Counting ID:', countingData.id);
-      
       try {
-        const { data: sectorRelations, error: sectorError } = await supabase
+        const { data: sectorRelations } = await supabase
           .from(COUNTING_SECTORS_TABLE)
           .select('sector_id')
           .eq('counting_id', countingData.id);
         
-        console.log('🔍 MOBILE: Resultado da consulta de setores:', { 
-          data: sectorRelations, 
-          error: sectorError,
-          length: sectorRelations?.length || 0 
-        });
-        
-        if (!sectorError && sectorRelations && sectorRelations.length > 0) {
-          sectorIds = sectorRelations.map(relation => relation.sector_id);
-          console.log('✅ MOBILE: Setores específicos encontrados:', sectorIds);
-        } else if (sectorError) {
-          console.log('❌ MOBILE: Erro ao buscar setores específicos:', sectorError.message);
-        } else {
-          console.log('⚠️ MOBILE: Nenhum setor específico encontrado');
+        if (sectorRelations && sectorRelations.length > 0) {
+          sectorIds = sectorRelations.map(r => r.sector_id);
         }
-        
       } catch (e) {
-        console.log('❌ MOBILE: Exceção ao buscar setores específicos:', e);
+        console.log('Erro ao buscar setores específicos');
       }
 
-      // FALLBACK ROBUSTO: Se nenhum setor específico, carregar todos da empresa
-      let finalSectorIds = sectorIds;
       if (sectorIds.length === 0) {
-        console.log('🔄 MOBILE: APLICANDO FALLBACK - Carregando todos os setores da empresa');
-        try {
-          const { data: allSectors, error: allSectorsError } = await supabase
-            .from(TABLES.SECTORS)
-            .select('id')
-            .eq('company_id', countingData.company_id);
-          
-          if (!allSectorsError && allSectors && allSectors.length > 0) {
-            finalSectorIds = allSectors.map(s => s.id);
-            console.log('✅ MOBILE: FALLBACK aplicado - Todos os setores da empresa:', finalSectorIds);
-          } else {
-            console.log('❌ MOBILE: FALLBACK falhou:', allSectorsError?.message);
-          }
-        } catch (fallbackError) {
-          console.log('❌ MOBILE: Exceção no fallback:', fallbackError);
+        const { data: allSectors } = await supabase
+          .from(TABLES.SECTORS)
+          .select('id')
+          .eq('company_id', countingData.company_id);
+        
+        if (allSectors && allSectors.length > 0) {
+          sectorIds = allSectors.map(s => s.id);
         }
       }
-
-      console.log('🏗️ MOBILE: Setores finais para a contagem:', finalSectorIds);
 
       const foundCounting: Counting = {
         id: countingData.id,
-        internalId: countingData.internal_id || countingData.id.substring(0, 8),
+        internalId: displayId,
         name: countingData.name,
         description: countingData.description,
         companyId: countingData.company_id,
-        createdBy: employeeDisplayName, // CORREÇÃO: Usar nome real em vez de UUID
+        createdBy: employeeDisplayName,
         status: countingData.status,
         shareLink: countingData.mobile_link,
         createdAt: countingData.created_at,
@@ -432,79 +558,42 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
 
       setCounting(foundCounting);
 
-      // Carregar dados da empresa
-      try {
-        const { data: companyData, error: companyError } = await supabase
-          .from(TABLES.COMPANIES)
-          .select('name')
-          .eq('id', foundCounting.companyId)
-          .single();
-        
-        if (!companyError && companyData) {
-          setCompanyName(companyData.name);
-        }
-      } catch (companyError) {
-        console.log('⚠️ MOBILE: Erro ao carregar empresa:', companyError);
-      }
+      const { data: companyData } = await supabase
+        .from(TABLES.COMPANIES)
+        .select('name')
+        .eq('id', foundCounting.companyId)
+        .single();
+      
+      if (companyData) setCompanyName(companyData.name);
 
-      // CORREÇÃO: Carregar setores para o dropdown com fallback
-      let mappedSectors: Sector[] = [];
-      if (finalSectorIds.length > 0) {
-        console.log('🔍 MOBILE: Carregando dados dos setores para dropdown...');
-        const { data: sectorsData, error: sectorsError } = await supabase
+      if (sectorIds.length > 0) {
+        const { data: sectorsData } = await supabase
           .from(TABLES.SECTORS)
           .select('*')
-          .in('id', finalSectorIds);
+          .in('id', sectorIds);
         
-        console.log('🔍 MOBILE: Resultado da consulta de setores:', { 
-          data: sectorsData, 
-          error: sectorsError,
-          length: sectorsData?.length || 0 
-        });
-        
-        if (!sectorsError && sectorsData) {
-          mappedSectors = sectorsData.map(s => ({
+        if (sectorsData) {
+          setSectors(sectorsData.map(s => ({
             id: s.id,
             name: s.name,
             description: s.description,
             companyId: s.company_id,
             createdAt: s.created_at,
             updatedAt: s.updated_at
-          }));
+          })));
         }
-        console.log('✅ MOBILE: Setores do dropdown carregados:', mappedSectors.length);
-      } else {
-        console.log('⚠️ MOBILE: Nenhum setor disponível para dropdown');
       }
-      
-      setSectors(mappedSectors);
 
-      // CORREÇÃO: Carregar produtos com fallback
       let productsQuery = supabase
         .from(TABLES.PRODUCTS)
         .select('*')
         .eq('company_id', foundCounting.companyId);
 
-      // Filtrar por setores APENAS se setores foram definidos
-      if (finalSectorIds.length > 0) {
-        console.log('🎯 MOBILE: Filtrando produtos por setores:', finalSectorIds);
-        productsQuery = productsQuery.in('sector_id', finalSectorIds);
-      } else {
-        console.log('⚠️ MOBILE: Carregando TODOS os produtos da empresa (sem filtro de setor)');
+      if (sectorIds.length > 0) {
+        productsQuery = productsQuery.in('sector_id', sectorIds);
       }
 
-      const { data: productsData, error: productsError } = await productsQuery;
-      
-      console.log('🔍 MOBILE: Resultado da consulta de produtos:', { 
-        data: productsData?.length || 0, 
-        error: productsError,
-        filteredBySectors: finalSectorIds.length > 0 
-      });
-      
-      if (productsError) {
-        console.error('❌ MOBILE: Erro ao carregar produtos:', productsError);
-        throw new Error(`Erro ao carregar produtos: ${productsError.message}`);
-      }
+      const { data: productsData } = await productsQuery;
       
       const mappedProducts = (productsData || []).map(p => ({
         id: p.id,
@@ -526,113 +615,86 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
       }));
       
       setProducts(mappedProducts);
-      console.log('✅ MOBILE: Produtos carregados:', mappedProducts.length);
 
-      // Carregar itens contados
-      try {
-        const { data: itemsData, error: itemsError } = await supabase
-          .from(COUNTING_ITEMS_TABLE)
-          .select('*')
-          .eq('counting_id', foundCounting.id);
+      const { data: itemsData } = await supabase
+        .from(COUNTING_ITEMS_TABLE)
+        .select('*')
+        .eq('counting_id', foundCounting.id);
+      
+      if (itemsData) {
+        const mappedItems = itemsData.map(item => ({
+          id: item.id,
+          countingId: item.counting_id,
+          productId: item.product_id,
+          quantity: item.counted_quantity || item.quantity || 0,
+          notes: item.notes,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at
+        }));
+        setCountingItems(mappedItems);
         
-        if (!itemsError && itemsData) {
-          const mappedItems = itemsData.map(item => ({
-            id: item.id,
-            countingId: item.counting_id,
-            productId: item.product_id,
-            quantity: item.counted_quantity || item.quantity || 0,
-            notes: item.notes,
-            createdAt: item.created_at,
-            updatedAt: item.updated_at
-          }));
-          setCountingItems(mappedItems);
-          
-          // Inicializar inputs de quantidade com valores existentes
-          const initialQuantityInputs: {[productId: string]: string} = {};
-          mappedItems.forEach(item => {
-            const product = mappedProducts.find(p => p.id === item.productId);
-            if (product) {
-              const unit = getProductUnit(product);
-              initialQuantityInputs[item.productId] = formatQuantityForDisplay(item.quantity, unit);
-            }
-          });
-          setQuantityInputs(initialQuantityInputs);
-          
-          console.log('✅ MOBILE: Itens contados carregados:', mappedItems.length);
-        } else {
-          setCountingItems([]);
-        }
-      } catch (itemsError) {
-        console.log('⚠️ MOBILE: Erro ao carregar itens contados:', itemsError);
-        setCountingItems([]);
+        const unavailable = new Set(
+          itemsData
+            .filter(item => item.is_unavailable === true)
+            .map(item => item.product_id)
+        );
+        setUnavailableProducts(unavailable);
+        
+        const initialQuantityInputs: {[productId: string]: string} = {};
+        mappedItems.forEach(item => {
+          const product = mappedProducts.find(p => p.id === item.productId);
+          if (product) {
+            const unit = getProductUnit(product);
+            initialQuantityInputs[item.productId] = formatQuantityForDisplay(item.quantity, unit);
+          }
+        });
+        setQuantityInputs(initialQuantityInputs);
       }
 
-      console.log('🎉 MOBILE: ===== TODOS OS DADOS CARREGADOS COM SUCESSO =====');
-      console.log('📊 MOBILE: Resumo:');
-      console.log('  - Nome do funcionário:', employeeDisplayName);
-      console.log('  - Setores no dropdown:', mappedSectors.length);
-      console.log('  - Produtos disponíveis:', mappedProducts.length);
-      console.log('  - Itens já contados:', countingItems.length);
-
     } catch (error) {
-      console.error('❌ MOBILE: Error loading counting data:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao carregar dados';
-      setError(`Erro ao carregar dados da contagem: ${errorMessage}`);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      setError(`Erro ao carregar dados: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
   };
 
   const saveProductQuantity = async (productId: string, quantity: number) => {
-    if (!counting) {
-      console.error('❌ Counting não existe');
-      return;
-    }
+    if (!counting) return;
 
-    console.log('💾 Salvando produto:', { productId, quantity, countingId: counting.id });
     setSavingItems(prev => new Set(prev).add(productId));
 
     try {
-      // Check Supabase connection before saving
       const supabaseReady = await checkSupabaseConnection();
-      if (!supabaseReady) {
-        throw new Error('Erro de conexão com o banco de dados');
-      }
+      if (!supabaseReady) throw new Error('Erro de conexão');
 
       const existingItem = countingItems.find(item => item.productId === productId);
       
       if (existingItem && !existingItem.id.startsWith('temp-')) {
-        // Update existing item
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from(COUNTING_ITEMS_TABLE)
           .update({ 
             counted_quantity: quantity, 
             quantity: quantity,
+            is_unavailable: false,
             updated_at: new Date().toISOString()
           })
-          .eq('id', existingItem.id)
-          .select()
-          .single();
+          .eq('id', existingItem.id);
         
-        if (error) {
-          console.error('❌ Erro ao atualizar item:', error);
-          throw new Error(`Erro ao atualizar item: ${error.message}`);
-        }
+        if (error) throw new Error(`Erro ao atualizar: ${error.message}`);
         
         setCountingItems(prev => 
           prev.map(item => 
-            item.id === existingItem.id 
-              ? { ...item, quantity: quantity }
-              : item
+            item.id === existingItem.id ? { ...item, quantity } : item
           )
         );
       } else {
-        // Create new item - CORREÇÃO: Usar INSERT simples
         const newItem = {
           counting_id: counting.id,
           product_id: productId,
           counted_quantity: quantity,
           quantity: quantity,
+          is_unavailable: false,
           notes: null,
           counted_by: counting.createdBy,
           counted_at: new Date().toISOString()
@@ -644,10 +706,7 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           .select()
           .single();
         
-        if (error) {
-          console.error('❌ Erro ao criar item:', error);
-          throw new Error(`Erro ao criar item: ${error.message}`);
-        }
+        if (error) throw new Error(`Erro ao criar: ${error.message}`);
         
         const mappedItem: CountingItem = {
           id: data.id,
@@ -665,13 +724,12 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
         });
       }
       
-      console.log('🎉 Produto salvo com sucesso!');
+      unmarkAsUnavailable(productId);
       showToast('Produto salvo com sucesso!', 'success');
       
     } catch (error) {
-      console.error('❌ Error saving quantity:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      showToast(`Erro ao salvar: ${errorMessage}`, 'error');
+      showToast(`Erro: ${errorMessage}`, 'error');
     } finally {
       setSavingItems(prev => {
         const newSet = new Set(prev);
@@ -688,14 +746,14 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
       const existingIndex = prev.findIndex(item => item.productId === productId);
       if (existingIndex >= 0) {
         const updated = [...prev];
-        updated[existingIndex] = { ...updated[existingIndex], quantity: quantity };
+        updated[existingIndex] = { ...updated[existingIndex], quantity };
         return updated;
       } else {
         return [...prev, {
           id: `temp-${productId}`,
           countingId: counting?.id || '',
-          productId: productId,
-          quantity: quantity,
+          productId,
+          quantity,
           notes: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -703,14 +761,12 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
       }
     });
     
-    // Atualizar também o input de quantidade
     const product = products.find(p => p.id === productId);
     if (product) {
       const unit = getProductUnit(product);
-      const displayValue = formatQuantityForDisplay(quantity, unit);
       setQuantityInputs(prev => ({
         ...prev,
-        [productId]: displayValue
+        [productId]: formatQuantityForDisplay(quantity, unit)
       }));
     }
   };
@@ -720,45 +776,28 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     return item?.quantity || 0;
   };
 
-  // RESTAURADO: Função para atualizar input da calculadora
   const updateCalculatorInput = (productId: string, value: string) => {
-    // Aceitar números e vírgula para calculadora
     const cleanValue = value.replace(/[^0-9,]/g, '');
     const parts = cleanValue.split(',');
     if (parts.length > 2) {
       const processedValue = parts[0] + ',' + parts.slice(1).join('');
-      setCalculatorInputs(prev => ({
-        ...prev,
-        [productId]: processedValue
-      }));
+      setCalculatorInputs(prev => ({ ...prev, [productId]: processedValue }));
     } else {
-      setCalculatorInputs(prev => ({
-        ...prev,
-        [productId]: cleanValue
-      }));
+      setCalculatorInputs(prev => ({ ...prev, [productId]: cleanValue }));
     }
   };
 
-  // RESTAURADO: Função para calcular e usar resultado da calculadora
   const calculateAndUse = (productId: string, conversionFactor: number) => {
     const boxQuantityStr = calculatorInputs[productId] || '0';
     const boxQuantity = parseDecimalInput(boxQuantityStr);
     const calculatedUnits = boxQuantity * conversionFactor;
     
-    // Atualizar quantidade do produto
     updateQuantity(productId, calculatedUnits);
+    setCalculatorInputs(prev => ({ ...prev, [productId]: '' }));
     
-    // Limpar input da calculadora
-    setCalculatorInputs(prev => ({
-      ...prev,
-      [productId]: ''
-    }));
-    
-    // Mostrar feedback
     const productUnit = getProductUnit(products.find(p => p.id === productId) || {} as Product);
-    const formattedBoxQuantity = boxQuantityStr.includes(',') ? boxQuantityStr : boxQuantity.toString();
     const formattedResult = calculatedUnits.toString().replace('.', ',');
-    showToast(`${formattedBoxQuantity} caixas = ${formattedResult} ${productUnit}`, 'success');
+    showToast(`${boxQuantityStr} caixas = ${formattedResult} ${productUnit}`, 'success');
   };
 
   const filteredProducts = products.filter(product => {
@@ -773,34 +812,31 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
       
       const matchesSector = !selectedSector || product.sectorId === selectedSector;
       
-      return matchesSearch && matchesSector;
+      let matchesStatus = true;
+      if (filterStatus === 'uncounted') {
+        const quantity = getProductQuantity(product.id);
+        matchesStatus = quantity === 0 && !unavailableProducts.has(product.id);
+      } else if (filterStatus === 'unavailable') {
+        matchesStatus = unavailableProducts.has(product.id);
+      }
+      
+      return matchesSearch && matchesSector && matchesStatus;
     } catch (error) {
-      console.error('❌ Error filtering product:', product, error);
       return false;
     }
   });
 
   const saveForLater = async () => {
-    if (!counting) {
-      console.error('❌ Counting não existe para salvar progresso');
-      return;
-    }
-
-    console.log('💾 Salvando progresso para mais tarde...');
+    if (!counting) return;
     setSavingProgress(true);
 
     try {
-      // Check Supabase connection
       const supabaseReady = await checkSupabaseConnection();
-      if (!supabaseReady) {
-        throw new Error('Erro de conexão com o banco de dados');
-      }
+      if (!supabaseReady) throw new Error('Erro de conexão');
 
-      // CORREÇÃO: Verificar itens existentes antes de inserir
       const itemsToSave = countingItems.filter(item => item.quantity > 0);
       
       if (itemsToSave.length > 0) {
-        // Buscar itens existentes
         const { data: existingItems } = await supabase
           .from(COUNTING_ITEMS_TABLE)
           .select('counting_id, product_id, id')
@@ -811,7 +847,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           existingMap.set(item.product_id, item.id);
         });
 
-        // Separar itens para inserir e atualizar
         const itemsToInsert = [];
         const itemsToUpdate = [];
 
@@ -827,28 +862,19 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           };
 
           if (existingMap.has(item.productId)) {
-            itemsToUpdate.push({
-              ...itemData,
-              id: existingMap.get(item.productId)
-            });
+            itemsToUpdate.push({ ...itemData, id: existingMap.get(item.productId) });
           } else {
             itemsToInsert.push(itemData);
           }
         });
 
-        // Inserir novos itens
         if (itemsToInsert.length > 0) {
           const { error: insertError } = await supabase
             .from(COUNTING_ITEMS_TABLE)
             .insert(itemsToInsert);
-
-          if (insertError) {
-            console.error('❌ Erro ao inserir novos itens:', insertError);
-            throw new Error(`Erro ao inserir itens: ${insertError.message}`);
-          }
+          if (insertError) throw new Error(`Erro ao inserir: ${insertError.message}`);
         }
 
-        // Atualizar itens existentes
         for (const item of itemsToUpdate) {
           const { error: updateError } = await supabase
             .from(COUNTING_ITEMS_TABLE)
@@ -858,17 +884,10 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
               updated_at: new Date().toISOString()
             })
             .eq('id', item.id);
-
-          if (updateError) {
-            console.error('❌ Erro ao atualizar item:', updateError);
-            throw new Error(`Erro ao atualizar item: ${updateError.message}`);
-          }
+          if (updateError) throw new Error(`Erro ao atualizar: ${updateError.message}`);
         }
-
-        console.log('✅ Itens salvos com sucesso');
       }
 
-      // Update counting status
       const { error } = await supabase
         .from(TABLES.COUNTINGS)
         .update({ 
@@ -877,43 +896,35 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
         })
         .eq('id', counting.id);
       
-      if (error) {
-        console.error('❌ Erro ao salvar progresso:', error);
-        throw new Error(`Erro ao salvar progresso: ${error.message}`);
-      }
+      if (error) throw new Error(`Erro ao salvar: ${error.message}`);
       
-      showToast('Progresso salvo com sucesso! Você pode continuar mais tarde.', 'success');
+      showToast('Progresso salvo! Você pode continuar mais tarde.', 'success');
       
     } catch (error) {
-      console.error('❌ Error saving progress:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      showToast(`Erro ao salvar progresso: ${errorMessage}`, 'error');
+      showToast(`Erro: ${errorMessage}`, 'error');
     } finally {
       setSavingProgress(false);
     }
   };
 
-  const completeCounting = async () => {
-    if (!counting) {
-      console.error('❌ Counting não existe para finalizar');
-      return;
-    }
+  // MODIFICADO: Abrir modal de observações
+  const completeCounting = () => {
+    setShowNotesModal(true);
+  };
 
-    console.log('🏁 Finalizando contagem...');
+  // NOVO: Confirmar finalização com observações
+  const confirmCompleteCounting = async () => {
+    if (!counting) return;
     setCompletingCounting(true);
 
     try {
-      // Check Supabase connection
       const supabaseReady = await checkSupabaseConnection();
-      if (!supabaseReady) {
-        throw new Error('Erro de conexão com o banco de dados');
-      }
+      if (!supabaseReady) throw new Error('Erro de conexão');
 
-      // CORREÇÃO: Mesmo processo de salvamento sem ON CONFLICT
       const itemsToSave = countingItems.filter(item => item.quantity > 0);
       
       if (itemsToSave.length > 0) {
-        // Buscar itens existentes
         const { data: existingItems } = await supabase
           .from(COUNTING_ITEMS_TABLE)
           .select('counting_id, product_id, id')
@@ -924,7 +935,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           existingMap.set(item.product_id, item.id);
         });
 
-        // Separar itens para inserir e atualizar
         const itemsToInsert = [];
         const itemsToUpdate = [];
 
@@ -940,28 +950,19 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           };
 
           if (existingMap.has(item.productId)) {
-            itemsToUpdate.push({
-              ...itemData,
-              id: existingMap.get(item.productId)
-            });
+            itemsToUpdate.push({ ...itemData, id: existingMap.get(item.productId) });
           } else {
             itemsToInsert.push(itemData);
           }
         });
 
-        // Inserir novos itens
         if (itemsToInsert.length > 0) {
           const { error: insertError } = await supabase
             .from(COUNTING_ITEMS_TABLE)
             .insert(itemsToInsert);
-
-          if (insertError) {
-            console.error('❌ Erro ao inserir itens finais:', insertError);
-            throw new Error(`Erro ao inserir itens: ${insertError.message}`);
-          }
+          if (insertError) throw new Error(`Erro ao inserir: ${insertError.message}`);
         }
 
-        // Atualizar itens existentes
         for (const item of itemsToUpdate) {
           const { error: updateError } = await supabase
             .from(COUNTING_ITEMS_TABLE)
@@ -971,52 +972,47 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
               updated_at: new Date().toISOString()
             })
             .eq('id', item.id);
-
-          if (updateError) {
-            console.error('❌ Erro ao atualizar item final:', updateError);
-            throw new Error(`Erro ao atualizar item: ${updateError.message}`);
-          }
+          if (updateError) throw new Error(`Erro ao atualizar: ${updateError.message}`);
         }
-
-        console.log('✅ Itens finais salvos com sucesso');
       }
 
-      // Update counting status to completed
+      // Salvar observações finais
+      const updateData: any = { 
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      if (finalNotes.trim()) {
+        updateData.final_notes = finalNotes.trim();
+      }
+
       const { error } = await supabase
         .from(TABLES.COUNTINGS)
-        .update({ 
-          status: 'completed',
-          completed_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', counting.id);
       
-      if (error) {
-        console.error('❌ Erro ao finalizar contagem:', error);
-        throw new Error(`Erro ao finalizar contagem: ${error.message}`);
-      }
+      if (error) throw new Error(`Erro ao finalizar: ${error.message}`);
       
-      setCounting(prev => prev ? {
-        ...prev,
-        status: 'completed'
-      } : null);
-      
+      setCounting(prev => prev ? { ...prev, status: 'completed' } : null);
+      setShowNotesModal(false);
       showToast('Contagem finalizada com sucesso!', 'success');
       
     } catch (error) {
-      console.error('❌ Error completing counting:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      showToast(`Erro ao finalizar contagem: ${errorMessage}`, 'error');
+      showToast(`Erro: ${errorMessage}`, 'error');
     } finally {
       setCompletingCounting(false);
     }
   };
 
-  // Calcular progresso
   const totalProducts = filteredProducts.length;
   const filledProducts = countingItems.filter(item => 
     filteredProducts.some(product => product.id === item.productId) && item.quantity > 0
   ).length;
   const remainingProducts = totalProducts - filledProducts;
+
+  // ========== LOADING & ERROR STATES ==========
 
   if (loading) {
     return (
@@ -1037,22 +1033,14 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
             <AlertTriangle className="w-8 h-8 text-red-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Contagem Expirada</h2>
-          <p className="text-gray-600 mb-4">
-            Esta contagem expirou e não pode mais ser preenchida.
-          </p>
+          <p className="text-gray-600 mb-4">Esta contagem expirou e não pode mais ser preenchida.</p>
           {deadline && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-sm text-red-800 mb-2 font-medium">
-                Prazo expirado em:
-              </p>
-              <p className="text-lg font-semibold text-red-900">
-                {formatDeadline(deadline)}
-              </p>
+              <p className="text-sm text-red-800 mb-2 font-medium">Prazo expirado em:</p>
+              <p className="text-lg font-semibold text-red-900">{formatDeadline(deadline)}</p>
             </div>
-            )}
-          <p className="text-sm text-gray-500">
-            Para reativar esta contagem, entre em contato com o BPO.
-          </p>
+          )}
+          <p className="text-sm text-gray-500">Para reativar esta contagem, entre em contato com o BPO.</p>
         </div>
       </div>
     );
@@ -1095,7 +1083,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
     );
   }
 
-  // Check if counting is approved - NEW VALIDATION
   if (counting && isCountingApproved(counting.status)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -1104,20 +1091,12 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Contagem Aprovada</h2>
-          <p className="text-gray-600 mb-4">
-            Esta contagem foi finalizada e aprovada. Caso necessário, uma nova contagem deve ser criada.
-          </p>
+          <p className="text-gray-600 mb-4">Esta contagem foi finalizada e aprovada. Caso necessário, uma nova contagem deve ser criada.</p>
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-green-800 mb-2 font-medium">
-              Status:
-            </p>
-            <p className="text-lg font-semibold text-green-900 capitalize">
-              {counting.status}
-            </p>
+            <p className="text-sm text-green-800 mb-2 font-medium">Status:</p>
+            <p className="text-lg font-semibold text-green-900 capitalize">{counting.status}</p>
           </div>
-          <p className="text-sm text-gray-500">
-            Entre em contato com o BPO para criar uma nova contagem se necessário.
-          </p>
+          <p className="text-sm text-gray-500">Entre em contato com o BPO para criar uma nova contagem se necessário.</p>
         </div>
       </div>
     );
@@ -1131,39 +1110,45 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Contagem Finalizada</h2>
-          <p className="text-gray-600 mb-2">
-            A contagem foi enviada ao painel e está concluída.
-          </p>
-          <p className="text-sm text-gray-500 mb-6">
-            Obrigado, {employeeName}!
-          </p>
+          <p className="text-gray-600 mb-2">A contagem foi enviada ao painel e está concluída.</p>
+          <p className="text-sm text-gray-500 mb-6">Obrigado, {employeeName}!</p>
         </div>
       </div>
     );
   }
 
+  // ========== MAIN RENDER ==========
+const getProductStatus = (productId: string): 'counted' | 'uncounted' | 'unavailable' => {
+  if (unavailableProducts.has(productId)) return 'unavailable';
+  const quantity = getProductQuantity(productId);
+  return quantity > 0 ? 'counted' : 'uncounted';
+};
+
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Toast Notifications */}
       {showSuccessToast && (
-        <Toast 
-          message={toastMessage} 
-          type="success" 
-          onClose={() => setShowSuccessToast(false)} 
-        />
+        <Toast message={toastMessage} type="success" onClose={() => setShowSuccessToast(false)} />
       )}
       {showSaveToast && (
-        <Toast 
-          message={toastMessage} 
-          type="error" 
-          onClose={() => setShowSaveToast(false)} 
-        />
+        <Toast message={toastMessage} type="error" onClose={() => setShowSaveToast(false)} />
       )}
+
+      <FilterDrawer />
+      <NotesModal />
+
+      {/* BOTÃO FLUTUANTE DE FILTROS */}
+      <button
+        onClick={() => setShowFilterDrawer(true)}
+        className="fixed top-20 right-4 z-30 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all transform hover:scale-110"
+        aria-label="Abrir filtros"
+      >
+        <Filter className="w-6 h-6" />
+      </button>
 
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-6">
-          {/* ID da Contagem */}
           <div className="text-center mb-3">
             <span className="inline-block bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full">
               ID: {countingDisplayId}
@@ -1173,21 +1158,14 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">
             Preencher contagem de estoque
           </h1>
-          <p className="text-lg text-gray-700 mb-1 text-center">
-            Olá {employeeName}
-          </p>
-          <p className="text-sm text-gray-600 mb-4 text-center">
-            DA EMPRESA: {companyName.toUpperCase()}
-          </p>
+          <p className="text-lg text-gray-700 mb-1 text-center">Olá {employeeName}</p>
+          <p className="text-sm text-gray-600 mb-4 text-center">DA EMPRESA: {companyName.toUpperCase()}</p>
           
-          {/* Deadline and Time Remaining - Only show if deadline exists */}
           {deadline && (
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-center space-x-2">
                 <Calendar className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">
-                  Prazo: {formatDeadline(deadline)}
-                </span>
+                <span className="text-sm font-medium text-gray-700">Prazo: {formatDeadline(deadline)}</span>
               </div>
               <div className="flex items-center justify-center space-x-2">
                 <Clock className="w-4 h-4 text-gray-500" />
@@ -1218,40 +1196,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white border-b px-4 py-4">
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nome ou código..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <select
-            value={selectedSector}
-            onChange={(e) => setSelectedSector(e.target.value)}
-            className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">Todos os setores</option>
-            {sectors.map(sector => (
-              <option key={sector.id} value={sector.id}>
-                {sector.name}
-              </option>
-            ))}
-          </select>
-          {/* INDICADOR DE STATUS DO FILTRO */}
-          {sectors.length === 0 && (
-            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
-              ⚠️ Filtro de setores indisponível - mostrando todos os produtos
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Products Feed */}
       <div className="pb-32">
         {filteredProducts.length === 0 ? (
@@ -1264,51 +1208,44 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
           </div>
         ) : (
           <div className="space-y-4 p-4">
-            {user.map((product) => {
+            {filteredProducts.map((product) => {
               const quantity = getProductQuantity(product.id);
               const isSaving = savingItems.has(product.id);
+              const isUnavailable = unavailableProducts.has(product.id);
               const boxQuantityStr = calculatorInputs[product.id] || '';
               const boxQuantity = parseDecimalInput(boxQuantityStr);
               const calculatedUnits = boxQuantity * product.conversionFactor;
               const productUnit = getProductUnit(product);
-              
-              // Usar valor do input de quantidade
               const quantityInputValue = quantityInputs[product.id] || (quantity === 0 ? '' : formatQuantityForDisplay(quantity, productUnit));
               
               return (
-                <div key={product.id} className="bg-white rounded-lg shadow-sm border p-4">
+                <div key={product.id} className={`bg-white rounded-lg shadow-sm border p-4 ${isUnavailable ? 'border-red-300 bg-red-50' : ''}`}>
                   <div className="space-y-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <p className="text-base text-gray-500 font-bold mb-2">
-                          CÓDIGO: {product.code || 'N/A'}
-                        </p>
-                        <h3 className="text-xl font-bold text-gray-900 leading-tight mb-2">
-                          {product.name}
-                        </h3>
+                        <p className="text-xl font-bold text-gray-500 leading-tight mb-2">CÓDIGO: {product.code || 'N/A'}</p>
+                        <h3 className="text-xl font-bold text-gray-900 leading-tight mb-2">{product.name}</h3>
+                        {isUnavailable && (
+                          <span className="inline-block bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">
+                            INDISPONÍVEL
+                          </span>
+                        )}
                       </div>
                     </div>
                     
-                    {/* RESTAURADO: Calculadora de Conversão */}
-                    {product.conversionFactor > 1 && (
+                    {product.conversionFactor > 1 && !isUnavailable && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                         <div className="flex items-center space-x-2 mb-3">
                           <span className="text-lg">🧮</span>
-                          <h4 className="text-sm font-semibold text-blue-900">
-                            CALCULADORA DE CONVERSÃO
-                          </h4>
+                          <h4 className="text-sm font-semibold text-blue-900">CALCULADORA DE CONVERSÃO</h4>
                         </div>
-                        
                         <div className="space-y-3">
-                          <div className="text-sm text-blue-800">
-                            Digite quantas caixas/embalagens:
-                          </div>
-                          
+                          <div className="text-sm text-blue-800">Digite quantas caixas/embalagens:</div>
                           <div className="flex items-center space-x-2 flex-wrap">
                             <input 
                               type="text"
-                              inputMode="text"
-                              placeholder=""
+                              inputMode="decimal"
+                              placeholder="0"
                               value={boxQuantityStr}
                               onChange={(e) => updateCalculatorInput(product.id, e.target.value)}
                               className="w-16 px-2 py-2 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1320,7 +1257,6 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
                               {calculatedUnits.toString().replace('.', ',')} {productUnit}
                             </span>
                           </div>
-                          
                           <button 
                             onClick={() => calculateAndUse(product.id, product.conversionFactor)}
                             disabled={boxQuantity === 0}
@@ -1334,107 +1270,116 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
                     
                     <div className="grid grid-cols-2 gap-4 text-xs">
                       <div>
-                        <span className="text-gray-500">Gramatura:</span>
-                        <p className="font-medium text-gray-900">{product.unit || 'N/A'}</p>
+                        <span className="text-xl font-bold text-gray-900 leading-tight mb-2">Gramatura:</span>
+                        <p className="text-xl font-bold text-gray-900 leading-tight mb-2">{product.unit || 'N/A'}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Fator conversão:</span>
-                        <p className="font-medium text-gray-900">{product.conversionFactor}</p>
+                        <span className="text-xl font-bold text-gray-900 leading-tight mb-2">Fator conversão:</span>
+                        <p className="text-xl font-bold text-gray-900 leading-tight mb-2">{product.conversionFactor}</p>
                       </div>
                     </div>
                     
-                    <div className="border-t pt-4">
-                      <div className="mb-4">
-                        <span className="text-base font-bold text-gray-900">Quantidade:</span>
-                        {allowsFractionalInput(productUnit) ? (
-                          <span className="text-xs text-green-600 ml-2">(aceita vírgula)</span>
-                        ) : (
-                          <span className="text-xs text-orange-600 ml-2">(apenas números inteiros)</span>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center justify-center space-x-3 mb-4">
-                        {/* Minus Button */}
-                        <button
-                          onClick={() => updateQuantity(product.id, quantity - 1)}
-                          className="w-12 h-12 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center touch-manipulation transition-colors"
-                          disabled={counting.status === 'completed'}
-                        >
-                          <Minus className="w-6 h-6" />
-                        </button>
+                    {!isUnavailable ? (
+                      <div className="border-t pt-4">
+                        <div className="mb-4">
+                          <span className="text-xl font-bold text-gray-900 leading-tight mb-2">Quantidade:</span>
+                          {allowsFractionalInput(productUnit) ? (
+                            <span className="text-xl font-bold text-green-600 leading-tight mb-2">(aceita vírgula)</span>
+                          ) : (
+                            <span className="text-xl font-bold text-orange-600 leading-tight mb-2">(apenas números inteiros)</span>
+                          )}
+                        </div>
                         
-                        {/* CORREÇÃO FINAL: Campo de quantidade com inputMode="decimal" e lógica simplificada */}
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={quantityInputValue}
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            
-                            // Permitir digitação livre primeiro - não processar em tempo real
-                            setQuantityInputs(prev => ({
-                              ...prev,
-                              [product.id]: inputValue
-                            }));
-                          }}
-                          onBlur={(e) => {
-                            // Processar apenas quando o usuário sair do campo
-                            const inputValue = e.target.value;
-                            let processedValue = inputValue;
-                            
-                            if (!allowsFractionalInput(productUnit)) {
-                              // Para UNIDADE: remover vírgula
-                              processedValue = inputValue.replace(/[^0-9]/g, '');
-                            } else {
-                              // Para KILO/GRAMA: aceitar vírgula
-                              processedValue = inputValue.replace(/[^0-9,]/g, '');
-                              const parts = processedValue.split(',');
-                              if (parts.length > 2) {
-                                processedValue = parts[0] + ',' + parts.slice(1).join('');
+                        <div className="flex items-center justify-center space-x-3 mb-4">
+                          <button
+                            onClick={() => updateQuantity(product.id, quantity - 1)}
+                            className="w-12 h-12 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center touch-manipulation transition-colors"
+                          >
+                            <Minus className="w-6 h-6" />
+                          </button>
+                          
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={quantityInputValue}
+                            onChange={(e) => {
+                              setQuantityInputs(prev => ({ ...prev, [product.id]: e.target.value }));
+                            }}
+                            onBlur={(e) => {
+                              const inputValue = e.target.value;
+                              let processedValue = inputValue;
+                              
+                              if (!allowsFractionalInput(productUnit)) {
+                                processedValue = inputValue.replace(/[^0-9]/g, '');
+                              } else {
+                                processedValue = inputValue.replace(/[^0-9,]/g, '');
+                                const parts = processedValue.split(',');
+                                if (parts.length > 2) {
+                                  processedValue = parts[0] + ',' + parts.slice(1).join('');
+                                }
                               }
-                            }
-                            
-                            setQuantityInputs(prev => ({
-                              ...prev,
-                              [product.id]: processedValue
-                            }));
-                            
-                            const numericValue = parseDecimalInput(processedValue);
-                            updateQuantity(product.id, numericValue);
-                          }}
-                          className="w-20 px-3 py-3 border border-gray-300 rounded-lg text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="0"
-                        />
+                              
+                              setQuantityInputs(prev => ({ ...prev, [product.id]: processedValue }));
+                              const numericValue = parseDecimalInput(processedValue);
+                              updateQuantity(product.id, numericValue);
+                            }}
+                            className="w-20 px-3 py-3 border border-gray-300 rounded-lg text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="0"
+                          />
+                          
+                          <button
+                            onClick={() => updateQuantity(product.id, quantity + 1)}
+                            className="w-12 h-12 rounded-full bg-green-100 text-green-600 hover:bg-green-200 flex items-center justify-center touch-manipulation transition-colors"
+                          >
+                            <Plus className="w-6 h-6" />
+                          </button>
+                        </div>
                         
-                        {/* Plus Button */}
-                        <button
-                          onClick={() => updateQuantity(product.id, quantity + 1)}
-                          className="w-12 h-12 rounded-full bg-green-100 text-green-600 hover:bg-green-200 flex items-center justify-center touch-manipulation transition-colors"
-                          disabled={counting.status === 'completed'}
-                        >
-                          <Plus className="w-6 h-6" />
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => saveProductQuantity(product.id, quantity)}
+                            disabled={isSaving}
+                            className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-lg font-semibold transition-colors"
+                          >
+                            {isSaving ? (
+                              <>
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                <span>Salvando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-5 h-5" />
+                                <span>Salvar</span>
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => markAsUnavailable(product.id)}
+                            className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center space-x-2 font-medium transition-colors"
+                          >
+                            <XCircle className="w-5 h-5" />
+                            <span>Não Tem</span>
+                          </button>
+                        </div>
                       </div>
                       
-                      {/* Save Button - Centered and Larger */}
-                      <button
-                        onClick={() => saveProductQuantity(product.id, quantity)}
-                        disabled={isSaving}
-                        className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-lg font-semibold transition-colors"
-                      >
-                        {isSaving ? (
-                          <>
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                            <span>Salvando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-5 h-5" />
-                            <span>Salvar</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="border-t pt-4">
+                        <div className="bg-red-100 border border-red-300 rounded-lg p-4 mb-4">
+                          <p className="text-red-800 text-sm font-medium text-center">
+                            Este produto foi marcado como indisponível
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => unmarkAsUnavailable(product.id)}
+                          className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center space-x-2 font-medium transition-colors"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                          <span>Marcar como Disponível</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -1444,7 +1389,7 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
       </div>
 
       {/* Fixed Bottom Actions */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-3 shadow-lg">
         <button
           onClick={saveForLater}
           disabled={savingProgress}
@@ -1481,7 +1426,7 @@ const [filterStatus, setFilterStatus] = useState<'all' | 'uncounted'>('all');
         </button>
       </div>
       
-      <style jsx>{`
+      <style>{`
         @keyframes slide-down {
           from {
             transform: translateY(-100%);
